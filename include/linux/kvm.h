@@ -115,7 +115,7 @@ struct kvm_run {
 			__u32 error_code;
 		} ex;
 		/* KVM_EXIT_IO */
-		struct kvm_io {
+		struct {
 #define KVM_EXIT_IO_IN  0
 #define KVM_EXIT_IO_OUT 1
 			__u8 direction;
@@ -234,10 +234,10 @@ struct kvm_debug_guest {
 /* for KVM_GET_DIRTY_LOG */
 struct kvm_dirty_log {
 	__u32 slot;
-	__u32 padding;
+	__u32 padding1;
 	union {
 		void __user *dirty_bitmap; /* one bit per page */
-		__u64 padding;
+		__u64 padding2;
 	};
 };
 
