@@ -3,6 +3,8 @@
 #
 obj- := misc.o	# Dummy rule to force built-in.o to be made
 
+obj-y += ai_tester.o
+
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_HDPU_FEATURES)	+= hdpuftrs/
 obj-$(CONFIG_ASUS_LAPTOP)	+= asus-laptop.o
