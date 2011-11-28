@@ -46,6 +46,7 @@
  *  linux/spinlock.h:     builds the final spin_*() APIs.
  */
 
+#include <linux/ai.h>
 #include <linux/typecheck.h>
 #include <linux/preempt.h>
 #include <linux/linkage.h>
@@ -175,11 +176,16 @@ do {								\
  * regardless of whether CONFIG_SMP or CONFIG_PREEMPT are set. The various
  * methods are defined as nops in the case they are not required.
  */
-#define spin_trylock(lock)		__cond_lock(lock, _spin_trylock(lock))
+#define spin_trylock(lock)		({ 			\
+	int __ai_ret = __cond_lock(lock, _spin_trylock(lock));	\
+	if (__ai_ret)						\
+		__ai_lock(lock);				\
+	__ai_ret;						\
+})
 #define read_trylock(lock)		__cond_lock(lock, _read_trylock(lock))
 #define write_trylock(lock)		__cond_lock(lock, _write_trylock(lock))
 
-#define spin_lock(lock)			_spin_lock(lock)
+#define spin_lock(lock)			do { _spin_lock(lock); __ai_lock(lock); } while (0)
 
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 # define spin_lock_nested(lock, subclass) _spin_lock_nested(lock, subclass)
@@ -189,8 +195,8 @@ do {								\
 		 _spin_lock_nest_lock(lock, &(nest_lock)->dep_map);	\
 	 } while (0)
 #else
-# define spin_lock_nested(lock, subclass) _spin_lock(lock)
-# define spin_lock_nest_lock(lock, nest_lock) _spin_lock(lock)
+# define spin_lock_nested(lock, subclass) do { _spin_lock(lock); __ai_lock(lock); } while (0)
+# define spin_lock_nest_lock(lock, nest_lock) do { _spin_lock(lock); __ai_lock(lock); } while (0)
 #endif
 
 #define write_lock(lock)		_write_lock(lock)
@@ -202,6 +208,7 @@ do {								\
 	do {						\
 		typecheck(unsigned long, flags);	\
 		flags = _spin_lock_irqsave(lock);	\
+		__ai_lock(lock);			\
 	} while (0)
 #define read_lock_irqsave(lock, flags)			\
 	do {						\
@@ -225,6 +232,7 @@ do {								\
 	do {								\
 		typecheck(unsigned long, flags);			\
 		flags = _spin_lock_irqsave(lock);			\
+		__ai_lock(lock);					\
 	} while (0)
 #endif
 
@@ -234,6 +242,7 @@ do {								\
 	do {						\
 		typecheck(unsigned long, flags);	\
 		_spin_lock_irqsave(lock, flags);	\
+		__ai_lock(lock);			\
 	} while (0)
 #define read_lock_irqsave(lock, flags)			\
 	do {						\
@@ -250,8 +259,8 @@ do {								\
 
 #endif
 
-#define spin_lock_irq(lock)		_spin_lock_irq(lock)
-#define spin_lock_bh(lock)		_spin_lock_bh(lock)
+#define spin_lock_irq(lock)		do { _spin_lock_irq(lock); __ai_lock(lock); } while (0)
+#define spin_lock_bh(lock)		do { _spin_lock_bh(lock); __ai_lock(lock); } while (0)
 
 #define read_lock_irq(lock)		_read_lock_irq(lock)
 #define read_lock_bh(lock)		_read_lock_bh(lock)
@@ -264,15 +273,15 @@ do {								\
  */
 #if defined(CONFIG_DEBUG_SPINLOCK) || defined(CONFIG_PREEMPT) || \
 	!defined(CONFIG_SMP)
-# define spin_unlock(lock)		_spin_unlock(lock)
+# define spin_unlock(lock)		do { _spin_unlock(lock); __ai_unlock(lock); } while (0)
 # define read_unlock(lock)		_read_unlock(lock)
 # define write_unlock(lock)		_write_unlock(lock)
-# define spin_unlock_irq(lock)		_spin_unlock_irq(lock)
+# define spin_unlock_irq(lock)		do { _spin_unlock_irq(lock); __ai_unlock(lock); } while (0)
 # define read_unlock_irq(lock)		_read_unlock_irq(lock)
 # define write_unlock_irq(lock)		_write_unlock_irq(lock)
 #else
 # define spin_unlock(lock) \
-    do {__raw_spin_unlock(&(lock)->raw_lock); __release(lock); } while (0)
+    do {__raw_spin_unlock(&(lock)->raw_lock); __release(lock); __ai_unlock(lock); } while (0)
 # define read_unlock(lock) \
     do {__raw_read_unlock(&(lock)->raw_lock); __release(lock); } while (0)
 # define write_unlock(lock) \
@@ -282,6 +291,7 @@ do {						\
 	__raw_spin_unlock(&(lock)->raw_lock);	\
 	__release(lock);			\
 	local_irq_enable();			\
+	__ai_unlock(lock);			\
 } while (0)
 # define read_unlock_irq(lock)			\
 do {						\
@@ -301,8 +311,9 @@ do {						\
 	do {						\
 		typecheck(unsigned long, flags);	\
 		_spin_unlock_irqrestore(lock, flags);	\
+		__ai_unlock(lock);			\
 	} while (0)
-#define spin_unlock_bh(lock)		_spin_unlock_bh(lock)
+#define spin_unlock_bh(lock)		do { _spin_unlock_bh(lock); __ai_unlock(lock); } while (0)
 
 #define read_unlock_irqrestore(lock, flags)		\
 	do {						\
@@ -318,7 +329,12 @@ do {						\
 	} while (0)
 #define write_unlock_bh(lock)		_write_unlock_bh(lock)
 
-#define spin_trylock_bh(lock)	__cond_lock(lock, _spin_trylock_bh(lock))
+#define spin_trylock_bh(lock)	({					\
+	int __ai_ret = __cond_lock(lock, _spin_trylock_bh(lock));	\
+	if (__ai_ret)							\
+		__ai_lock(lock);					\
+	__ai_ret;							\
+})
 
 #define spin_trylock_irq(lock) \
 ({ \
@@ -355,8 +371,12 @@ do {						\
  * @lock.  Returns false for all other cases.
  */
 extern int _atomic_dec_and_lock(atomic_t *atomic, spinlock_t *lock);
-#define atomic_dec_and_lock(atomic, lock) \
-		__cond_lock(lock, _atomic_dec_and_lock(atomic, lock))
+#define atomic_dec_and_lock(atomic, lock)  ({				\
+	int __ai_ret = __cond_lock(lock, _atomic_dec_and_lock(atomic, lock)); \
+	if (__ai_ret)							\
+		__ai_lock(lock);					\
+	__ai_ret;							\
+})
 
 /**
  * spin_can_lock - would spin_trylock() succeed?
