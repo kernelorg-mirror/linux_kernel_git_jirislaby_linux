@@ -138,12 +138,8 @@ extern int __must_check mutex_lock_interruptible(struct mutex *lock);
 extern int __must_check mutex_lock_killable(struct mutex *lock);
 
 #define mutex_lock(L) do { mutex_lock(L); __ai_lock(L); } while (0)
-#define mutex_lock_interruptible(L) ({				\
-	int __ai_ret = mutex_lock_interruptible(L);		\
-	if (!__ai_ret)						\
-		__ai_lock(L);					\
-	__ai_ret;						\
-})
+#define mutex_lock_interruptible(L) (__ai_lock_cond(L) ? 0 : -EINTR)
+#define mutex_lock_killable(L) (__ai_lock_cond(L) ? 0 : -EINTR)
 
 # define mutex_lock_nested(lock, subclass) mutex_lock(lock)
 # define mutex_lock_interruptible_nested(lock, subclass) mutex_lock_interruptible(lock)
@@ -155,12 +151,8 @@ extern int __must_check mutex_lock_killable(struct mutex *lock);
  *       not the down_trylock() convention!
  */
 extern int mutex_trylock(struct mutex *lock);
-#define mutex_trylock(L) ({				\
-	int __ai_ret = mutex_trylock(L);		\
-	if (__ai_ret)					\
-		__ai_lock(L);				\
-	__ai_ret;					\
-})
+#define mutex_trylock(L) __ai_lock_cond(L)
+
 extern void mutex_unlock(struct mutex *lock);
 #define mutex_unlock(L) do { mutex_unlock(L); __ai_unlock(L); } while (0)
 

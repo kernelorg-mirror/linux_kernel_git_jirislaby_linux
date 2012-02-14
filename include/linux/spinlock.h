@@ -176,12 +176,7 @@ do {								\
  * regardless of whether CONFIG_SMP or CONFIG_PREEMPT are set. The various
  * methods are defined as nops in the case they are not required.
  */
-#define spin_trylock(lock)		({ 			\
-	int __ai_ret = __cond_lock(lock, _spin_trylock(lock));	\
-	if (__ai_ret)						\
-		__ai_lock(lock);				\
-	__ai_ret;						\
-})
+#define spin_trylock(lock)		__ai_lock_cond(lock)
 #define read_trylock(lock)		__cond_lock(lock, _read_trylock(lock))
 #define write_trylock(lock)		__cond_lock(lock, _write_trylock(lock))
 
