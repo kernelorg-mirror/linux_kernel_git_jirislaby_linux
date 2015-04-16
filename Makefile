@@ -800,8 +800,8 @@ KBUILD_ARFLAGS := $(call ar-option,D)
 
 # check for 'asm goto'
 ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-goto.sh $(CC) $(KBUILD_CFLAGS)), y)
-	KBUILD_CFLAGS += -DCC_HAVE_ASM_GOTO
-	KBUILD_AFLAGS += -DCC_HAVE_ASM_GOTO
+	KBUILD_CFLAGS += -DCC_HAVE_ASM_GOTO1
+	KBUILD_AFLAGS += -DCC_HAVE_ASM_GOTO1
 endif
 
 include scripts/Makefile.kasan

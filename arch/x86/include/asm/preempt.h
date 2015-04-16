@@ -19,18 +19,12 @@ DECLARE_PER_CPU(int, __preempt_count);
  */
 static __always_inline int preempt_count(void)
 {
-	return raw_cpu_read_4(__preempt_count) & ~PREEMPT_NEED_RESCHED;
+	return __preempt_count & ~PREEMPT_NEED_RESCHED;
 }
 
 static __always_inline void preempt_count_set(int pc)
 {
-	int old, new;
-
-	do {
-		old = raw_cpu_read_4(__preempt_count);
-		new = (old & PREEMPT_NEED_RESCHED) |
-			(pc & ~PREEMPT_NEED_RESCHED);
-	} while (raw_cpu_cmpxchg_4(__preempt_count, old, new) != old);
+	__preempt_count = pc;
 }
 
 /*

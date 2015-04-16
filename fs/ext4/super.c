@@ -3350,7 +3350,7 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	int ret = -ENOMEM;
 	int blocksize, clustersize;
 	unsigned int db_count;
-	unsigned int i;
+	unsigned int i, shift;
 	int needs_recovery, has_huge_files, has_bigalloc;
 	__u64 blocks_count;
 	int err = 0;
@@ -3609,7 +3609,12 @@ static int ext4_fill_super(struct super_block *sb, void *data, int silent)
 	if (!ext4_feature_set_ok(sb, (sb->s_flags & MS_RDONLY)))
 		goto failed_mount;
 
-	blocksize = BLOCK_SIZE << le32_to_cpu(es->s_log_block_size);
+//	printf("%d BS=%lu\n", BLOCK_SIZE, klee_get_valuel(le32_to_cpu(es->s_log_block_size)));
+	shift = max(10U, le32_to_cpu(es->s_log_block_size));
+//	printf("S=%u\n", klee_get_valuel(shift));
+//	klee_print_expr("SS=", shift);
+	blocksize = BLOCK_SIZE << shift;
+	__assert_fail("xx", __FILE__, __LINE__, __PRETTY_FUNCTION__);
 	if (blocksize < EXT4_MIN_BLOCK_SIZE ||
 	    blocksize > EXT4_MAX_BLOCK_SIZE) {
 		ext4_msg(sb, KERN_ERR,
@@ -5620,7 +5625,7 @@ static inline int ext3_feature_set_ok(struct super_block *sb)
 	return 1;
 }
 
-static struct file_system_type ext4_fs_type = {
+struct file_system_type ext4_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "ext4",
 	.mount		= ext4_mount,

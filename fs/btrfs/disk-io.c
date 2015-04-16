@@ -267,7 +267,8 @@ out:
 
 u32 btrfs_csum_data(const char *data, u32 seed, size_t len)
 {
-	return btrfs_crc32c(seed, data, len);
+	extern int klee_int(const char *name);
+	return klee_int(__func__);//btrfs_crc32c(seed, data, len);
 }
 
 void btrfs_csum_final(u32 crc, u8 *result)

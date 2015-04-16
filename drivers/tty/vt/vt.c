@@ -1405,6 +1405,7 @@ static void csi_m(struct vc_data *vc)
 			break;
 		case 38:
 			i = vc_t416_color(vc, i, rgb_foreground);
+			printf("byl jsem tu\n");
 			break;
 		case 48:
 			i = vc_t416_color(vc, i, rgb_background);
@@ -1437,10 +1438,10 @@ static void csi_m(struct vc_data *vc)
 static void respond_string(const char *p, struct tty_port *port)
 {
 	while (*p) {
-		tty_insert_flip_char(port, *p, 0);
+//		tty_insert_flip_char(port, *p, 0);
 		p++;
 	}
-	tty_schedule_flip(port);
+//	tty_schedule_flip(port);
 }
 
 static void cursor_report(struct vc_data *vc, struct tty_struct *tty)
@@ -1745,7 +1746,7 @@ static void reset_terminal(struct vc_data *vc, int do_clear)
 }
 
 /* console_lock is held */
-static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
+void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
 {
 	/*
 	 *  Control characters can be used in the _middle_
@@ -2184,7 +2185,7 @@ static void con_flush(struct vc_data *vc, unsigned long draw_from,
 }
 
 /* acquires console_lock */
-static int do_con_write(struct tty_struct *tty, const unsigned char *buf, int count)
+int do_con_write(struct tty_struct *tty, const unsigned char *buf, int count)
 {
 	int c, tc, ok, n = 0, draw_x = -1;
 	unsigned int currcons;
@@ -2965,7 +2966,7 @@ static void vc_init(struct vc_data *vc, unsigned int rows,
  * the appropriate escape-sequence.
  */
 
-static int __init con_init(void)
+int __init con_init(void)
 {
 	const char *display_desc = NULL;
 	struct vc_data *vc;

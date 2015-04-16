@@ -65,7 +65,7 @@
 #include <trace/events/btrfs.h>
 
 static const struct super_operations btrfs_super_ops;
-static struct file_system_type btrfs_fs_type;
+struct file_system_type btrfs_fs_type;
 
 static int btrfs_remount(struct super_block *sb, int *flags, char *data);
 
@@ -1112,7 +1112,7 @@ static int get_default_subvol_objectid(struct btrfs_fs_info *fs_info, u64 *objec
 	return 0;
 }
 
-static int btrfs_fill_super(struct super_block *sb,
+int btrfs_fill_super(struct super_block *sb,
 			    struct btrfs_fs_devices *fs_devices,
 			    void *data)
 {
@@ -2170,7 +2170,7 @@ static void btrfs_kill_super(struct super_block *sb)
 	free_fs_info(fs_info);
 }
 
-static struct file_system_type btrfs_fs_type = {
+struct file_system_type btrfs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "btrfs",
 	.mount		= btrfs_mount,

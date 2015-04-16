@@ -46,7 +46,7 @@
  * Macros to generate condition code outputs from inline assembly,
  * The output operand must be type "bool".
  */
-#ifdef __GCC_ASM_FLAG_OUTPUTS__
+#ifdef __GCC_ASM_FLAG_OUTPUTS__1
 # define CC_SET(c) "\n\t/* output condition code " #c "*/\n"
 # define CC_OUT(c) "=@cc" #c
 #else

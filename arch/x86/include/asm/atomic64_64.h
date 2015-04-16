@@ -56,9 +56,7 @@ static __always_inline void atomic64_add(long i, atomic64_t *v)
  */
 static inline void atomic64_sub(long i, atomic64_t *v)
 {
-	asm volatile(LOCK_PREFIX "subq %1,%0"
-		     : "=m" (v->counter)
-		     : "er" (i), "m" (v->counter));
+	v->counter -= i;
 }
 
 /**
@@ -72,7 +70,8 @@ static inline void atomic64_sub(long i, atomic64_t *v)
  */
 static inline bool atomic64_sub_and_test(long i, atomic64_t *v)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "subq", v->counter, "er", i, "%0", e);
+	v->counter -= i;
+	return v->counter == 0;
 }
 
 /**
@@ -83,9 +82,7 @@ static inline bool atomic64_sub_and_test(long i, atomic64_t *v)
  */
 static __always_inline void atomic64_inc(atomic64_t *v)
 {
-	asm volatile(LOCK_PREFIX "incq %0"
-		     : "=m" (v->counter)
-		     : "m" (v->counter));
+	v->counter++;
 }
 
 /**
@@ -96,9 +93,7 @@ static __always_inline void atomic64_inc(atomic64_t *v)
  */
 static __always_inline void atomic64_dec(atomic64_t *v)
 {
-	asm volatile(LOCK_PREFIX "decq %0"
-		     : "=m" (v->counter)
-		     : "m" (v->counter));
+	v->counter--;
 }
 
 /**
@@ -111,7 +106,7 @@ static __always_inline void atomic64_dec(atomic64_t *v)
  */
 static inline bool atomic64_dec_and_test(atomic64_t *v)
 {
-	GEN_UNARY_RMWcc(LOCK_PREFIX "decq", v->counter, "%0", e);
+	return --v->counter == 0;
 }
 
 /**
@@ -124,7 +119,7 @@ static inline bool atomic64_dec_and_test(atomic64_t *v)
  */
 static inline bool atomic64_inc_and_test(atomic64_t *v)
 {
-	GEN_UNARY_RMWcc(LOCK_PREFIX "incq", v->counter, "%0", e);
+	return ++v->counter == 0;
 }
 
 /**
@@ -138,7 +133,8 @@ static inline bool atomic64_inc_and_test(atomic64_t *v)
  */
 static inline bool atomic64_add_negative(long i, atomic64_t *v)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "addq", v->counter, "er", i, "%0", s);
+	v->counter += i;
+	return v->counter < 0;
 }
 
 /**
@@ -150,7 +146,8 @@ static inline bool atomic64_add_negative(long i, atomic64_t *v)
  */
 static __always_inline long atomic64_add_return(long i, atomic64_t *v)
 {
-	return i + xadd(&v->counter, i);
+	v->counter += i;
+	return v->counter;
 }
 
 static inline long atomic64_sub_return(long i, atomic64_t *v)
@@ -173,12 +170,17 @@ static inline long atomic64_fetch_sub(long i, atomic64_t *v)
 
 static inline long atomic64_cmpxchg(atomic64_t *v, long old, long new)
 {
-	return cmpxchg(&v->counter, old, new);
+	long mold = v->counter;
+	if (mold == old)
+		v->counter = new;
+	return mold;
 }
 
 static inline long atomic64_xchg(atomic64_t *v, long new)
 {
-	return xchg(&v->counter, new);
+	long old = v->counter;
+	v->counter = new;
+	return old;
 }
 
 /**

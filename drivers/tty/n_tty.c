@@ -2438,7 +2438,7 @@ static int n_tty_ioctl(struct tty_struct *tty, struct file *file,
 	}
 }
 
-static struct tty_ldisc_ops n_tty_ops = {
+struct tty_ldisc_ops n_tty_ops = {
 	.magic           = TTY_LDISC_MAGIC,
 	.name            = "n_tty",
 	.open            = n_tty_open,

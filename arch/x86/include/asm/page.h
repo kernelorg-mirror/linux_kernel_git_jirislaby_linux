@@ -76,6 +76,7 @@ extern bool __virt_addr_valid(unsigned long kaddr);
 #include <asm-generic/getorder.h>
 
 #define HAVE_ARCH_HUGETLB_UNMAPPED_AREA
+#define WANT_PAGE_VIRTUAL 1
 
 #endif	/* __KERNEL__ */
 #endif /* _ASM_X86_PAGE_H */

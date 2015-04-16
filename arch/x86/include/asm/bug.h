@@ -25,9 +25,12 @@ do {								\
 } while (0)
 
 #else
+extern void __assert_fail(const char *__assertion, const char *__file,
+		unsigned int __line, const char *__function)
+		__attribute__ ((__noreturn__));
 #define BUG()							\
 do {								\
-	asm volatile("ud2");					\
+	__assert_fail("BUG", __FILE__, __LINE__, __PRETTY_FUNCTION__); \
 	unreachable();						\
 } while (0)
 #endif

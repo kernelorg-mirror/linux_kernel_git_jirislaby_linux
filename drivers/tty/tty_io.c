@@ -140,7 +140,7 @@ LIST_HEAD(tty_drivers);			/* linked list of tty drivers */
 DEFINE_MUTEX(tty_mutex);
 
 static ssize_t tty_read(struct file *, char __user *, size_t, loff_t *);
-static ssize_t tty_write(struct file *, const char __user *, size_t, loff_t *);
+ssize_t tty_write(struct file *, const char __user *, size_t, loff_t *);
 ssize_t redirected_tty_write(struct file *, const char __user *,
 							size_t, loff_t *);
 static unsigned int tty_poll(struct file *, poll_table *);
@@ -1234,7 +1234,7 @@ void tty_write_message(struct tty_struct *tty, char *msg)
  *	write method will not be invoked in parallel for each device.
  */
 
-static ssize_t tty_write(struct file *file, const char __user *buf,
+ssize_t tty_write(struct file *file, const char __user *buf,
 						size_t count, loff_t *ppos)
 {
 	struct tty_struct *tty = file_tty(file);

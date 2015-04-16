@@ -54,6 +54,23 @@
 #define CONST_MASK(nr)			(1 << ((nr) & 7))
 
 /**
+ * __set_bit - Set a bit in memory
+ * @nr: the bit to set
+ * @addr: the address to start counting from
+ *
+ * Unlike set_bit(), this function is non-atomic and may be reordered.
+ * If it's called on the same region of memory simultaneously, the effect
+ * may be that only one operation succeeds.
+ */
+static __always_inline void __set_bit(long nr, volatile unsigned long *addr)
+{
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+
+	*p |= mask;
+}
+
+/**
  * set_bit - Atomically set a bit in memory
  * @nr: the bit to set
  * @addr: the address to start counting from
@@ -71,29 +88,15 @@
 static __always_inline void
 set_bit(long nr, volatile unsigned long *addr)
 {
-	if (IS_IMMEDIATE(nr)) {
-		asm volatile(LOCK_PREFIX "orb %1,%0"
-			: CONST_MASK_ADDR(nr, addr)
-			: "iq" ((u8)CONST_MASK(nr))
-			: "memory");
-	} else {
-		asm volatile(LOCK_PREFIX "bts %1,%0"
-			: BITOP_ADDR(addr) : "Ir" (nr) : "memory");
-	}
+	__set_bit(nr, addr);
 }
 
-/**
- * __set_bit - Set a bit in memory
- * @nr: the bit to set
- * @addr: the address to start counting from
- *
- * Unlike set_bit(), this function is non-atomic and may be reordered.
- * If it's called on the same region of memory simultaneously, the effect
- * may be that only one operation succeeds.
- */
-static __always_inline void __set_bit(long nr, volatile unsigned long *addr)
+static __always_inline void __clear_bit(long nr, volatile unsigned long *addr)
 {
-	asm volatile("bts %1,%0" : ADDR : "Ir" (nr) : "memory");
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+
+	*p &= ~mask;
 }
 
 /**
@@ -109,15 +112,7 @@ static __always_inline void __set_bit(long nr, volatile unsigned long *addr)
 static __always_inline void
 clear_bit(long nr, volatile unsigned long *addr)
 {
-	if (IS_IMMEDIATE(nr)) {
-		asm volatile(LOCK_PREFIX "andb %1,%0"
-			: CONST_MASK_ADDR(nr, addr)
-			: "iq" ((u8)~CONST_MASK(nr)));
-	} else {
-		asm volatile(LOCK_PREFIX "btr %1,%0"
-			: BITOP_ADDR(addr)
-			: "Ir" (nr));
-	}
+	__clear_bit(nr, addr);
 }
 
 /*
@@ -132,11 +127,6 @@ static __always_inline void clear_bit_unlock(long nr, volatile unsigned long *ad
 {
 	barrier();
 	clear_bit(nr, addr);
-}
-
-static __always_inline void __clear_bit(long nr, volatile unsigned long *addr)
-{
-	asm volatile("btr %1,%0" : ADDR : "Ir" (nr));
 }
 
 static __always_inline bool clear_bit_unlock_is_negative_byte(long nr, volatile unsigned long *addr)
@@ -181,7 +171,10 @@ static __always_inline void __clear_bit_unlock(long nr, volatile unsigned long *
  */
 static __always_inline void __change_bit(long nr, volatile unsigned long *addr)
 {
-	asm volatile("btc %1,%0" : ADDR : "Ir" (nr));
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+
+	*p ^= mask;
 }
 
 /**
@@ -195,41 +188,7 @@ static __always_inline void __change_bit(long nr, volatile unsigned long *addr)
  */
 static __always_inline void change_bit(long nr, volatile unsigned long *addr)
 {
-	if (IS_IMMEDIATE(nr)) {
-		asm volatile(LOCK_PREFIX "xorb %1,%0"
-			: CONST_MASK_ADDR(nr, addr)
-			: "iq" ((u8)CONST_MASK(nr)));
-	} else {
-		asm volatile(LOCK_PREFIX "btc %1,%0"
-			: BITOP_ADDR(addr)
-			: "Ir" (nr));
-	}
-}
-
-/**
- * test_and_set_bit - Set a bit and return its old value
- * @nr: Bit to set
- * @addr: Address to count from
- *
- * This operation is atomic and cannot be reordered.
- * It also implies a memory barrier.
- */
-static __always_inline bool test_and_set_bit(long nr, volatile unsigned long *addr)
-{
-	GEN_BINARY_RMWcc(LOCK_PREFIX "bts", *addr, "Ir", nr, "%0", c);
-}
-
-/**
- * test_and_set_bit_lock - Set a bit and return its old value for lock
- * @nr: Bit to set
- * @addr: Address to count from
- *
- * This is the same as test_and_set_bit on x86.
- */
-static __always_inline bool
-test_and_set_bit_lock(long nr, volatile unsigned long *addr)
-{
-	return test_and_set_bit(nr, addr);
+	__change_bit(nr, addr);
 }
 
 /**
@@ -243,26 +202,38 @@ test_and_set_bit_lock(long nr, volatile unsigned long *addr)
  */
 static __always_inline bool __test_and_set_bit(long nr, volatile unsigned long *addr)
 {
-	bool oldbit;
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+	unsigned long old = *p;
 
-	asm("bts %2,%1\n\t"
-	    CC_SET(c)
-	    : CC_OUT(c) (oldbit), ADDR
-	    : "Ir" (nr));
-	return oldbit;
+	*p = old | mask;
+	return (old & mask) != 0;
 }
 
 /**
- * test_and_clear_bit - Clear a bit and return its old value
- * @nr: Bit to clear
+ * test_and_set_bit - Set a bit and return its old value
+ * @nr: Bit to set
  * @addr: Address to count from
  *
  * This operation is atomic and cannot be reordered.
  * It also implies a memory barrier.
  */
-static __always_inline bool test_and_clear_bit(long nr, volatile unsigned long *addr)
+static __always_inline bool test_and_set_bit(long nr, volatile unsigned long *addr)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "btr", *addr, "Ir", nr, "%0", c);
+	return __test_and_set_bit(nr, addr);
+}
+
+/**
+ * test_and_set_bit_lock - Set a bit and return its old value for lock
+ * @nr: Bit to set
+ * @addr: Address to count from
+ *
+ * This is the same as test_and_set_bit on x86.
+ */
+static __always_inline bool
+test_and_set_bit_lock(long nr, volatile unsigned long *addr)
+{
+	return test_and_set_bit(nr, addr);
 }
 
 /**
@@ -283,26 +254,36 @@ static __always_inline bool test_and_clear_bit(long nr, volatile unsigned long *
  */
 static __always_inline bool __test_and_clear_bit(long nr, volatile unsigned long *addr)
 {
-	bool oldbit;
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+	unsigned long old = *p;
 
-	asm volatile("btr %2,%1\n\t"
-		     CC_SET(c)
-		     : CC_OUT(c) (oldbit), ADDR
-		     : "Ir" (nr));
-	return oldbit;
+	*p = old & ~mask;
+	return (old & mask) != 0;
+}
+
+/**
+ * test_and_clear_bit - Clear a bit and return its old value
+ * @nr: Bit to clear
+ * @addr: Address to count from
+ *
+ * This operation is atomic and cannot be reordered.
+ * It also implies a memory barrier.
+ */
+static __always_inline bool test_and_clear_bit(long nr, volatile unsigned long *addr)
+{
+	return __test_and_clear_bit(nr, addr);
 }
 
 /* WARNING: non atomic and it can be reordered! */
 static __always_inline bool __test_and_change_bit(long nr, volatile unsigned long *addr)
 {
-	bool oldbit;
+	unsigned long mask = BIT_MASK(nr);
+	unsigned long *p = ((unsigned long *)addr) + BIT_WORD(nr);
+	unsigned long old = *p;
 
-	asm volatile("btc %2,%1\n\t"
-		     CC_SET(c)
-		     : CC_OUT(c) (oldbit), ADDR
-		     : "Ir" (nr) : "memory");
-
-	return oldbit;
+	*p = old ^ mask;
+	return (old & mask) != 0;
 }
 
 /**
@@ -315,7 +296,7 @@ static __always_inline bool __test_and_change_bit(long nr, volatile unsigned lon
  */
 static __always_inline bool test_and_change_bit(long nr, volatile unsigned long *addr)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "btc", *addr, "Ir", nr, "%0", c);
+	return __test_and_change_bit(nr, addr);
 }
 
 static __always_inline bool constant_test_bit(long nr, const volatile unsigned long *addr)
@@ -326,14 +307,7 @@ static __always_inline bool constant_test_bit(long nr, const volatile unsigned l
 
 static __always_inline bool variable_test_bit(long nr, volatile const unsigned long *addr)
 {
-	bool oldbit;
-
-	asm volatile("bt %2,%1\n\t"
-		     CC_SET(c)
-		     : CC_OUT(c) (oldbit)
-		     : "m" (*(unsigned long *)addr), "Ir" (nr));
-
-	return oldbit;
+	return constant_test_bit(nr, addr);
 }
 
 #if 0 /* Fool kernel-doc since it doesn't do macros yet */
@@ -358,10 +332,33 @@ static bool test_bit(int nr, const volatile unsigned long *addr);
  */
 static __always_inline unsigned long __ffs(unsigned long word)
 {
-	asm("rep; bsf %1,%0"
-		: "=r" (word)
-		: "rm" (word));
-	return word;
+	int num = 0;
+
+#if BITS_PER_LONG == 64
+	if ((word & 0xffffffff) == 0) {
+		num += 32;
+		word >>= 32;
+	}
+#endif
+	if ((word & 0xffff) == 0) {
+		num += 16;
+		word >>= 16;
+	}
+	if ((word & 0xff) == 0) {
+		num += 8;
+		word >>= 8;
+	}
+	if ((word & 0xf) == 0) {
+		num += 4;
+		word >>= 4;
+	}
+	if ((word & 0x3) == 0) {
+		num += 2;
+		word >>= 2;
+	}
+	if ((word & 0x1) == 0)
+		num += 1;
+	return num;
 }
 
 /**

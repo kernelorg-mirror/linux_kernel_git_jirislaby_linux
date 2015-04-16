@@ -47,9 +47,7 @@ static __always_inline void atomic_set(atomic_t *v, int i)
  */
 static __always_inline void atomic_add(int i, atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "addl %1,%0"
-		     : "+m" (v->counter)
-		     : "ir" (i));
+	v->counter += i;
 }
 
 /**
@@ -61,9 +59,7 @@ static __always_inline void atomic_add(int i, atomic_t *v)
  */
 static __always_inline void atomic_sub(int i, atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "subl %1,%0"
-		     : "+m" (v->counter)
-		     : "ir" (i));
+	v->counter -= i;
 }
 
 /**
@@ -77,7 +73,8 @@ static __always_inline void atomic_sub(int i, atomic_t *v)
  */
 static __always_inline bool atomic_sub_and_test(int i, atomic_t *v)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "subl", v->counter, "er", i, "%0", e);
+	v->counter -= i;
+	return v->counter == 0;
 }
 
 /**
@@ -88,8 +85,7 @@ static __always_inline bool atomic_sub_and_test(int i, atomic_t *v)
  */
 static __always_inline void atomic_inc(atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "incl %0"
-		     : "+m" (v->counter));
+	++v->counter;
 }
 
 /**
@@ -100,8 +96,7 @@ static __always_inline void atomic_inc(atomic_t *v)
  */
 static __always_inline void atomic_dec(atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "decl %0"
-		     : "+m" (v->counter));
+	--v->counter;
 }
 
 /**
@@ -114,7 +109,7 @@ static __always_inline void atomic_dec(atomic_t *v)
  */
 static __always_inline bool atomic_dec_and_test(atomic_t *v)
 {
-	GEN_UNARY_RMWcc(LOCK_PREFIX "decl", v->counter, "%0", e);
+	return --v->counter == 0;
 }
 
 /**
@@ -127,7 +122,7 @@ static __always_inline bool atomic_dec_and_test(atomic_t *v)
  */
 static __always_inline bool atomic_inc_and_test(atomic_t *v)
 {
-	GEN_UNARY_RMWcc(LOCK_PREFIX "incl", v->counter, "%0", e);
+	return ++v->counter == 0;
 }
 
 /**
@@ -141,7 +136,8 @@ static __always_inline bool atomic_inc_and_test(atomic_t *v)
  */
 static __always_inline bool atomic_add_negative(int i, atomic_t *v)
 {
-	GEN_BINARY_RMWcc(LOCK_PREFIX "addl", v->counter, "er", i, "%0", s);
+	v->counter += i;
+	return v->counter < 0;
 }
 
 /**
@@ -153,7 +149,8 @@ static __always_inline bool atomic_add_negative(int i, atomic_t *v)
  */
 static __always_inline int atomic_add_return(int i, atomic_t *v)
 {
-	return i + xadd(&v->counter, i);
+	v->counter += i;
+	return v->counter;
 }
 
 /**
@@ -183,12 +180,17 @@ static __always_inline int atomic_fetch_sub(int i, atomic_t *v)
 
 static __always_inline int atomic_cmpxchg(atomic_t *v, int old, int new)
 {
-	return cmpxchg(&v->counter, old, new);
+	int mold = v->counter;
+	if (mold == old)
+		v->counter = new;
+	return mold;
 }
 
 static inline int atomic_xchg(atomic_t *v, int new)
 {
-	return xchg(&v->counter, new);
+	int old = v->counter;
+	v->counter = new;
+	return old;
 }
 
 #define ATOMIC_OP(op)							\

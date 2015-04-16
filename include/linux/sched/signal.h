@@ -312,7 +312,8 @@ static inline int restart_syscall(void)
 
 static inline int signal_pending(struct task_struct *p)
 {
-	return unlikely(test_tsk_thread_flag(p,TIF_SIGPENDING));
+	extern int klee_int(const char *name);
+	return klee_int("signal_pending");
 }
 
 static inline int __fatal_signal_pending(struct task_struct *p)

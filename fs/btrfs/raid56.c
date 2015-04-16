@@ -237,7 +237,9 @@ int btrfs_alloc_stripe_hash_table(struct btrfs_fs_info *info)
 		init_waitqueue_head(&cur->wait);
 	}
 
-	x = cmpxchg(&info->stripe_hash_table, NULL, table);
+	x = info->stripe_hash_table;
+	if (info->stripe_hash_table == NULL)
+		info->stripe_hash_table = table;
 	if (x)
 		kvfree(x);
 	return 0;

@@ -14,38 +14,19 @@
 
 static inline unsigned long native_save_fl(void)
 {
-	unsigned long flags;
-
-	/*
-	 * "=rm" is safe here, because "pop" adjusts the stack before
-	 * it evaluates its effective address -- this is part of the
-	 * documented behavior of the "pop" instruction.
-	 */
-	asm volatile("# __raw_save_flags\n\t"
-		     "pushf ; pop %0"
-		     : "=rm" (flags)
-		     : /* no input */
-		     : "memory");
-
-	return flags;
+	return 0;
 }
 
 static inline void native_restore_fl(unsigned long flags)
 {
-	asm volatile("push %0 ; popf"
-		     : /* no output */
-		     :"g" (flags)
-		     :"memory", "cc");
 }
 
 static inline void native_irq_disable(void)
 {
-	asm volatile("cli": : :"memory");
 }
 
 static inline void native_irq_enable(void)
 {
-	asm volatile("sti": : :"memory");
 }
 
 static inline __cpuidle void native_safe_halt(void)

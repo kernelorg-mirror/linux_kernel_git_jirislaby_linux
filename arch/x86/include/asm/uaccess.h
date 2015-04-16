@@ -162,18 +162,15 @@ __typeof__(__builtin_choose_expr(sizeof(x) > sizeof(0UL), 0ULL, 0UL))
  * Clang/LLVM cares about the size of the register, but still wants
  * the base register for something that ends up being a pair.
  */
+extern void klee_make_symbolic(void *addr, size_t nbytes, const char *name);
 #define get_user(x, ptr)						\
 ({									\
-	int __ret_gu;							\
-	register __inttype(*(ptr)) __val_gu asm("%"_ASM_DX);		\
-	register void *__sp asm(_ASM_SP);				\
-	__chk_user_ptr(ptr);						\
-	might_fault();							\
-	asm volatile("call __get_user_%P4"				\
-		     : "=a" (__ret_gu), "=r" (__val_gu), "+r" (__sp)	\
-		     : "0" (ptr), "i" (sizeof(*(ptr))));		\
-	(x) = (__force __typeof__(*(ptr))) __val_gu;			\
-	__builtin_expect(__ret_gu, 0);					\
+ 	__typeof__(*(ptr)) __yyy; \
+ 	klee_make_symbolic(&(__yyy), sizeof(__yyy), "get_user");	\
+ 	(x) = __yyy; \
+	if (0)								\
+		(x) = (__force __typeof__(*(ptr))) *ptr;		\
+ 	0; \
 })
 
 #define __put_user_x(size, x, ptr, __ret_pu)			\
@@ -247,29 +244,9 @@ extern void __put_user_8(void);
  */
 #define put_user(x, ptr)					\
 ({								\
-	int __ret_pu;						\
-	__typeof__(*(ptr)) __pu_val;				\
-	__chk_user_ptr(ptr);					\
-	might_fault();						\
-	__pu_val = x;						\
-	switch (sizeof(*(ptr))) {				\
-	case 1:							\
-		__put_user_x(1, __pu_val, ptr, __ret_pu);	\
-		break;						\
-	case 2:							\
-		__put_user_x(2, __pu_val, ptr, __ret_pu);	\
-		break;						\
-	case 4:							\
-		__put_user_x(4, __pu_val, ptr, __ret_pu);	\
-		break;						\
-	case 8:							\
-		__put_user_x8(__pu_val, ptr, __ret_pu);		\
-		break;						\
-	default:						\
-		__put_user_x(X, __pu_val, ptr, __ret_pu);	\
-		break;						\
-	}							\
-	__builtin_expect(__ret_pu, 0);				\
+ 	if (0)							\
+	*(ptr) = (__force __typeof__(*(ptr)))(x);		\
+ 	0; \
 })
 
 #define __put_user_size(x, ptr, size, retval, errret)			\

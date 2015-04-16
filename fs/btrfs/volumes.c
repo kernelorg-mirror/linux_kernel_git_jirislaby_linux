@@ -259,8 +259,8 @@ static noinline struct btrfs_device *__find_device(struct list_head *head,
 	struct btrfs_device *dev;
 
 	list_for_each_entry(dev, head, dev_list) {
-		if (dev->devid == devid &&
-		    (!uuid || !memcmp(dev->uuid, uuid, BTRFS_UUID_SIZE))) {
+		if (dev->devid == devid) {/* &&
+		    (!uuid || !memcmp(dev->uuid, uuid, BTRFS_UUID_SIZE))) {*/
 			return dev;
 		}
 	}
@@ -600,7 +600,7 @@ void btrfs_free_stale_device(struct btrfs_device *cur_dev)
  * 0   - device already known
  * < 0 - error
  */
-static noinline int device_list_add(const char *path,
+noinline int device_list_add(const char *path,
 			   struct btrfs_super_block *disk_super,
 			   u64 devid, struct btrfs_fs_devices **fs_devices_ret)
 {

@@ -191,7 +191,7 @@ int inode_init_always(struct super_block *sb, struct inode *inode)
 	inode->i_fsnotify_mask = 0;
 #endif
 	inode->i_flctx = NULL;
-	this_cpu_inc(nr_inodes);
+//	this_cpu_inc(nr_inodes);
 
 	return 0;
 out:
@@ -423,9 +423,10 @@ void inode_add_lru(struct inode *inode)
 
 static void inode_lru_list_del(struct inode *inode)
 {
-
-	if (list_lru_del(&inode->i_sb->s_inode_lru, &inode->i_lru))
-		this_cpu_dec(nr_unused);
+	if (!list_empty(&inode->i_lru))
+		list_del_init(&inode->i_lru);
+/*	if (list_lru_del(&inode->i_sb->s_inode_lru, &inode->i_lru))
+		this_cpu_dec(nr_unused);*/
 }
 
 /**
@@ -473,7 +474,7 @@ void __insert_inode_hash(struct inode *inode, unsigned long hashval)
 
 	spin_lock(&inode_hash_lock);
 	spin_lock(&inode->i_lock);
-	hlist_add_head(&inode->i_hash, b);
+//	hlist_add_head(&inode->i_hash, b);
 	spin_unlock(&inode->i_lock);
 	spin_unlock(&inode_hash_lock);
 }
