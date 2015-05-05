@@ -232,7 +232,7 @@ ENTRY(system_call)
 	stg	%r2,__PT_ORIG_GPR2(%r11)
 	stg	%r7,STACK_FRAME_OVERHEAD(%r15)
 	lgf	%r9,0(%r8,%r10)			# get system call add.
-	tm	__TI_flags+7(%r12),_TIF_TRACE
+	tm	__TI_flags+4(%r12),_TIF_TRACE>>24
 	jnz	.Lsysc_tracesys
 	basr	%r14,%r9			# call sys_xxxx
 	stg	%r2,__PT_R2(%r11)		# store return value
@@ -368,7 +368,7 @@ ENTRY(system_call)
 	basr	%r14,%r9		# call sys_xxx
 	stg	%r2,__PT_R2(%r11)	# store return value
 .Lsysc_tracenogo:
-	tm	__TI_flags+7(%r12),_TIF_TRACE
+	tm	__TI_flags+4(%r12),_TIF_TRACE>>24
 	jz	.Lsysc_return
 	lgr	%r2,%r11		# pass pointer to pt_regs
 	larl	%r14,.Lsysc_return
