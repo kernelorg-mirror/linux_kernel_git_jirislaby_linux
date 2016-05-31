@@ -264,7 +264,7 @@ static void speakup_date(struct vc_data *vc)
 {
 	spk_x = spk_cx = vc->state.x;
 	spk_y = spk_cy = vc->state.y;
-	spk_pos = spk_cp = vc->vc_pos;
+	spk_pos = spk_cp = (unsigned long)vc->vc_pos;
 	spk_old_attr = spk_attr;
 	spk_attr = get_attributes(vc, (u_short *)spk_pos);
 }
@@ -1547,7 +1547,7 @@ static void do_handle_cursor(struct vc_data *vc, u_char value, char up_flag)
  * moves regardless of no_inter state
  */
 	is_cursor = value + 1;
-	old_cursor_pos = vc->vc_pos;
+	old_cursor_pos = (unsigned long)vc->vc_pos;
 	old_cursor_x = vc->state.x;
 	old_cursor_y = vc->state.y;
 	speakup_console[vc->vc_num]->ht.cy = vc->state.y;
@@ -1570,7 +1570,8 @@ static void update_color_buffer(struct vc_data *vc, const u16 *ic, int len)
 
 	i = 0;
 	if (speakup_console[vc_num]->ht.highsize[bi] == 0) {
-		speakup_console[vc_num]->ht.rpos[bi] = vc->vc_pos;
+		speakup_console[vc_num]->ht.rpos[bi] =
+			(unsigned long)vc->vc_pos;
 		speakup_console[vc_num]->ht.rx[bi] = vc->state.x;
 		speakup_console[vc_num]->ht.ry[bi] = vc->state.y;
 	}

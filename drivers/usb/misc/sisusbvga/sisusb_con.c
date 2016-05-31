@@ -723,7 +723,7 @@ sisusbcon_cursor(struct vc_data *c, int mode)
 		return;
 	}
 
-	sisusb_set_cursor(sisusb, (c->vc_pos - sisusb->scrbuf) / 2);
+	sisusb_set_cursor(sisusb, c->vc_pos - (u16 *)sisusb->scrbuf);
 
 	baseline = c->vc_font.height - (c->vc_font.height < 10 ? 1 : 2);
 
@@ -918,7 +918,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 
 	sisusbcon_set_start_address(sisusb, c);
 
-	c->vc_pos = c->vc_pos - oldorigin + c->vc_origin;
+	c->vc_pos += (c->vc_origin - oldorigin) / 2;
 
 	mutex_unlock(&sisusb->lock);
 

@@ -219,7 +219,7 @@ static void cw_cursor(struct vc_data *vc, struct fb_info *info, int mode,
 
 	cursor.set = 0;
 
- 	c = scr_readw((u16 *) vc->vc_pos);
+	c = scr_readw(vc->vc_pos);
 	attribute = get_attribute(info, c);
 	src = ops->fontbuffer + ((c & charmask) * (w * vc->vc_font.width));
 

@@ -502,7 +502,7 @@ static void vgacon_cursor(struct vc_data *c, int mode)
 
 	switch (mode) {
 	case CM_ERASE:
-		write_vga(14, (c->vc_pos - vga_vram_base) / 2);
+		write_vga(14, c->vc_pos - (u16 *)vga_vram_base);
 	        if (vga_video_type >= VIDEO_TYPE_VGAC)
 			vgacon_set_cursor_size(c->state.x, 31, 30);
 		else
@@ -511,7 +511,7 @@ static void vgacon_cursor(struct vc_data *c, int mode)
 
 	case CM_MOVE:
 	case CM_DRAW:
-		write_vga(14, (c->vc_pos - vga_vram_base) / 2);
+		write_vga(14, c->vc_pos - (u16 *)vga_vram_base);
 		switch (CUR_SIZE(c->vc_cursor_type)) {
 		case CUR_UNDERLINE:
 			vgacon_set_cursor_size(c->state.x,
@@ -1183,7 +1183,7 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
 	c->vc_visible_origin = c->vc_origin;
 	vga_set_mem_top(c);
-	c->vc_pos = (c->vc_pos - oldo) + c->vc_origin;
+	c->vc_pos += (c->vc_origin - oldo) / 2;
 	return true;
 }
 

@@ -839,7 +839,7 @@ void complement_pos(struct vc_data *vc, int offset)
 
 static void insert_char(struct vc_data *vc, unsigned int nr)
 {
-	unsigned short *p = (unsigned short *) vc->vc_pos;
+	u16 *p = vc->vc_pos;
 
 	vc_uniscr_insert(vc, nr);
 	scr_memmovew(p + nr, p, (vc->vc_cols - vc->state.x - nr) * 2);
@@ -852,7 +852,7 @@ static void insert_char(struct vc_data *vc, unsigned int nr)
 
 static void delete_char(struct vc_data *vc, unsigned int nr)
 {
-	unsigned short *p = (unsigned short *) vc->vc_pos;
+	u16 *p = vc->vc_pos;
 
 	vc_uniscr_delete(vc, nr);
 	scr_memcpyw(p, p + nr, (vc->vc_cols - vc->state.x - nr) * 2);
@@ -868,7 +868,7 @@ static int softcursor_original = -1;
 
 static void add_softcursor(struct vc_data *vc)
 {
-	int i = scr_readw((u16 *) vc->vc_pos);
+	int i = scr_readw(vc->vc_pos);
 	u32 type = vc->vc_cursor_type;
 
 	if (!(type & CUR_SW))
@@ -883,7 +883,7 @@ static void add_softcursor(struct vc_data *vc)
 		i ^= CUR_BG;
 	if ((type & CUR_INVERT_FG_BG) && (i & CUR_FG) == ((i & CUR_BG) >> 4))
 		i ^= CUR_FG;
-	scr_writew(i, (u16 *)vc->vc_pos);
+	scr_writew(i, vc->vc_pos);
 	if (con_should_update(vc))
 		vc->vc_sw->con_putc(vc, i, vc->state.y, vc->state.x);
 }
@@ -891,7 +891,7 @@ static void add_softcursor(struct vc_data *vc)
 static void hide_softcursor(struct vc_data *vc)
 {
 	if (softcursor_original != -1) {
-		scr_writew(softcursor_original, (u16 *)vc->vc_pos);
+		scr_writew(softcursor_original, vc->vc_pos);
 		if (con_should_update(vc))
 			vc->vc_sw->con_putc(vc, softcursor_original,
 					vc->state.y, vc->state.x);
@@ -932,8 +932,7 @@ static void set_origin(struct vc_data *vc)
 		vc->vc_origin = (unsigned long)vc->vc_screenbuf;
 	vc->vc_visible_origin = vc->vc_origin;
 	vc->vc_scr_end = vc->vc_origin + vc->vc_screenbuf_size;
-	vc->vc_pos = vc->vc_origin + vc->vc_size_row * vc->state.y +
-		2 * vc->state.x;
+	vc->vc_pos = (u16 *)vc->vc_origin + vc->state.y * vc->vc_cols + vc->state.x;
 }
 
 static void save_screen(struct vc_data *vc)
@@ -1458,8 +1457,7 @@ static void gotoxy(struct vc_data *vc, int new_x, int new_y)
 		vc->state.y = max_y - 1;
 	else
 		vc->state.y = new_y;
-	vc->vc_pos = vc->vc_origin + vc->state.y * vc->vc_size_row +
-		(vc->state.x << 1);
+	vc->vc_pos = (u16 *)vc->vc_origin + vc->state.y * vc->vc_cols + vc->state.x;
 	vc->vc_need_wrap = 0;
 }
 
@@ -1489,8 +1487,8 @@ static void lf(struct vc_data *vc)
 	if (vc->state.y + 1 == vc->vc_bottom)
 		con_scroll(vc, vc->vc_top, vc->vc_bottom, SM_UP, 1);
 	else if (vc->state.y < vc->vc_rows - 1) {
-		vc->state.y++;
-		vc->vc_pos += vc->vc_size_row;
+	    	vc->state.y++;
+		vc->vc_pos += vc->vc_cols;
 	}
 	vc->vc_need_wrap = 0;
 	notify_write(vc, '\n');
@@ -1505,14 +1503,14 @@ static void ri(struct vc_data *vc)
 		con_scroll(vc, vc->vc_top, vc->vc_bottom, SM_DOWN, 1);
 	else if (vc->state.y > 0) {
 		vc->state.y--;
-		vc->vc_pos -= vc->vc_size_row;
+		vc->vc_pos -= vc->vc_cols;
 	}
 	vc->vc_need_wrap = 0;
 }
 
 static inline void cr(struct vc_data *vc)
 {
-	vc->vc_pos -= vc->state.x << 1;
+	vc->vc_pos -= vc->state.x;
 	vc->vc_need_wrap = vc->state.x = 0;
 	notify_write(vc, '\r');
 }
@@ -1520,7 +1518,7 @@ static inline void cr(struct vc_data *vc)
 static inline void bs(struct vc_data *vc)
 {
 	if (vc->state.x) {
-		vc->vc_pos -= 2;
+		vc->vc_pos--;
 		vc->state.x--;
 		vc->vc_need_wrap = 0;
 		notify_write(vc, '\b');
@@ -1535,7 +1533,7 @@ static inline void del(struct vc_data *vc)
 static void csi_J(struct vc_data *vc, int vpar)
 {
 	unsigned int count;
-	unsigned short * start;
+	u16 *start;
 
 	switch (vpar) {
 		case 0:	/* erase from cursor to end of display */
@@ -1543,14 +1541,14 @@ static void csi_J(struct vc_data *vc, int vpar)
 					     vc->vc_cols - vc->state.x);
 			vc_uniscr_clear_lines(vc, vc->state.y + 1,
 					      vc->vc_rows - vc->state.y - 1);
-			count = (vc->vc_scr_end - vc->vc_pos) >> 1;
-			start = (unsigned short *)vc->vc_pos;
+			count = (vc->vc_scr_end - (ulong)vc->vc_pos) >> 1;
+			start = vc->vc_pos;
 			break;
 		case 1:	/* erase from start to cursor */
 			vc_uniscr_clear_line(vc, 0, vc->state.x + 1);
 			vc_uniscr_clear_lines(vc, 0, vc->state.y);
-			count = ((vc->vc_pos - vc->vc_origin) >> 1) + 1;
-			start = (unsigned short *)vc->vc_origin;
+			count = (((ulong)vc->vc_pos - vc->vc_origin) >> 1) + 1;
+			start = (u16 *)vc->vc_origin;
 			break;
 		case 3: /* include scrollback */
 			flush_scrollback(vc);
@@ -1572,7 +1570,7 @@ static void csi_J(struct vc_data *vc, int vpar)
 static void csi_K(struct vc_data *vc, int vpar)
 {
 	unsigned int count;
-	unsigned short *start = (unsigned short *)vc->vc_pos;
+	u16 *start = vc->vc_pos;
 	int offset;
 
 	switch (vpar) {
@@ -1609,7 +1607,7 @@ static void csi_X(struct vc_data *vc, unsigned int vpar)
 	count = min(vpar, vc->vc_cols - vc->state.x);
 
 	vc_uniscr_clear_line(vc, vc->state.x, count);
-	scr_memsetw((unsigned short *)vc->vc_pos, vc->vc_video_erase_char, 2 * count);
+	scr_memsetw(vc->vc_pos, vc->vc_video_erase_char, 2 * count);
 	if (con_should_update(vc))
 		vc->vc_sw->con_clear(vc, vc->state.y, vc->state.x, 1, count);
 	vc->vc_need_wrap = 0;
@@ -2155,7 +2153,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
 		bs(vc);
 		return;
 	case 9:
-		vc->vc_pos -= (vc->state.x << 1);
+		vc->vc_pos -= vc->state.x;
 
 		vc->state.x = find_next_bit(vc->vc_tab_stop,
 				min(vc->vc_cols - 1, VC_TABSTOPS_COUNT),
@@ -2163,7 +2161,7 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
 		if (vc->state.x >= VC_TABSTOPS_COUNT)
 			vc->state.x = vc->vc_cols - 1;
 
-		vc->vc_pos += (vc->state.x << 1);
+		vc->vc_pos += vc->state.x;
 		notify_write(vc, '\t');
 		return;
 	case 10: case 11: case 12:
@@ -2565,7 +2563,7 @@ static int is_double_width(uint32_t ucs)
 }
 
 struct vc_draw_region {
-	unsigned long from, to;
+	u16 *from, *to;
 	int x;
 };
 
@@ -2574,8 +2572,7 @@ static void con_flush(struct vc_data *vc, struct vc_draw_region *draw)
 	if (draw->x < 0)
 		return;
 
-	vc->vc_sw->con_putcs(vc, (u16 *)draw->from,
-			(u16 *)draw->to - (u16 *)draw->from, vc->state.y,
+	vc->vc_sw->con_putcs(vc, draw->from, draw->to - draw->from, vc->state.y,
 			draw->x);
 	draw->x = -1;
 }
@@ -2819,7 +2816,7 @@ static int vc_con_write_normal(struct vc_data *vc, int tc, int c,
 			      (tc &  0xff);
 		tc |= (vc_attr << 8) & ~himask;
 
-		scr_writew(tc, (u16 *)vc->vc_pos);
+		scr_writew(tc, vc->vc_pos);
 
 		if (con_should_update(vc) && draw->x < 0) {
 			draw->x = vc->state.x;
@@ -2827,10 +2824,11 @@ static int vc_con_write_normal(struct vc_data *vc, int tc, int c,
 		}
 		if (vc->state.x == vc->vc_cols - 1) {
 			vc->vc_need_wrap = vc->vc_decawm;
-			draw->to = vc->vc_pos + 2;
+			draw->to = vc->vc_pos + 1;
 		} else {
 			vc->state.x++;
-			draw->to = (vc->vc_pos += 2);
+			vc->vc_pos++;
+			draw->to = vc->vc_pos;
 		}
 
 		if (!--width)
@@ -3040,7 +3038,7 @@ static void vt_console_print(struct console *co, const char *b, unsigned count)
 	struct vc_data *vc = vc_cons[fg_console].d;
 	unsigned char c;
 	static DEFINE_SPINLOCK(printing_lock);
-	const ushort *start;
+	const u16 *start;
 	ushort start_x, cnt;
 	int kmsg_console;
 
@@ -3067,7 +3065,7 @@ static void vt_console_print(struct console *co, const char *b, unsigned count)
 	if (con_is_fg(vc))
 		hide_cursor(vc);
 
-	start = (ushort *)vc->vc_pos;
+	start = vc->vc_pos;
 	start_x = vc->state.x;
 	cnt = 0;
 	while (count--) {
@@ -3078,26 +3076,26 @@ static void vt_console_print(struct console *co, const char *b, unsigned count)
 			cnt = 0;
 			if (c == 8) {		/* backspace */
 				bs(vc);
-				start = (ushort *)vc->vc_pos;
+				start = vc->vc_pos;
 				start_x = vc->state.x;
 				continue;
 			}
 			if (c != 13)
 				lf(vc);
 			cr(vc);
-			start = (ushort *)vc->vc_pos;
+			start = vc->vc_pos;
 			start_x = vc->state.x;
 			if (c == 10 || c == 13)
 				continue;
 		}
 		vc_uniscr_putc(vc, c);
-		scr_writew((vc->vc_attr << 8) + c, (unsigned short *)vc->vc_pos);
+		scr_writew((vc->vc_attr << 8) + c, vc->vc_pos);
 		notify_write(vc, c);
 		cnt++;
 		if (vc->state.x == vc->vc_cols - 1) {
 			vc->vc_need_wrap = 1;
 		} else {
-			vc->vc_pos += 2;
+			vc->vc_pos++;
 			vc->state.x++;
 		}
 	}
@@ -3418,7 +3416,7 @@ static void vc_init(struct vc_data *vc, unsigned int rows,
 	vc->vc_screenbuf_size = vc->vc_rows * vc->vc_size_row;
 
 	set_origin(vc);
-	vc->vc_pos = vc->vc_origin;
+	vc->vc_pos = (u16 *)vc->vc_origin;
 	reset_vc(vc);
 	for (j=k=0; j<16; j++) {
 		vc->vc_palette[k++] = default_red[j] ;
@@ -4728,7 +4726,7 @@ void putconsxy(struct vc_data *vc, unsigned char xy[static const 2])
 
 u16 vcs_scr_readw(const struct vc_data *vc, const u16 *org)
 {
-	if ((unsigned long)org == vc->vc_pos && softcursor_original != -1)
+	if (org == vc->vc_pos && softcursor_original != -1)
 		return softcursor_original;
 	return scr_readw(org);
 }
@@ -4736,7 +4734,7 @@ u16 vcs_scr_readw(const struct vc_data *vc, const u16 *org)
 void vcs_scr_writew(struct vc_data *vc, u16 val, u16 *org)
 {
 	scr_writew(val, org);
-	if ((unsigned long)org == vc->vc_pos) {
+	if (org == vc->vc_pos) {
 		softcursor_original = -1;
 		add_softcursor(vc);
 	}

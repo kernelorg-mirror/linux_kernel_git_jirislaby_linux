@@ -381,7 +381,7 @@ static void fb_flashcursor(struct work_struct *work)
 		return;
 	}
 
-	c = scr_readw((u16 *) vc->vc_pos);
+	c = scr_readw(vc->vc_pos);
 	mode = (!ops->cursor_flash || ops->cursor_state.enable) ?
 		CM_ERASE : CM_DRAW;
 	ops->cursor(vc, info, mode, get_color(vc, info, c, 1),
@@ -624,7 +624,7 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 			else
 				lines = logo_lines;
 			vc->state.y += lines;
-			vc->vc_pos += lines * vc->vc_size_row;
+			vc->vc_pos += lines * vc->vc_cols;
 		}
 	}
 	scr_memsetw((unsigned short *) vc->vc_origin,
@@ -642,7 +642,7 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 					rows);
 		scr_memcpyw(q, save, array3_size(logo_lines, new_cols, 2));
 		vc->state.y += logo_lines;
-		vc->vc_pos += logo_lines * vc->vc_size_row;
+		vc->vc_pos += logo_lines * vc->vc_cols;
 		kfree(save);
 	}
 
@@ -1319,7 +1319,7 @@ static void fbcon_cursor(struct vc_data *vc, int mode)
 {
 	struct fb_info *info = registered_fb[con2fb_map[vc->vc_num]];
 	struct fbcon_ops *ops = info->fbcon_par;
- 	int c = scr_readw((u16 *) vc->vc_pos);
+ 	int c = scr_readw(vc->vc_pos);
 
 	ops->cur_blink_jiffies = msecs_to_jiffies(vc->vc_cur_blink_ms);
 
