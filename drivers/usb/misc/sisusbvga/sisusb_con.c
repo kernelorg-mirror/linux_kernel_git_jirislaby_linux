@@ -508,7 +508,7 @@ sisusbcon_switch(struct vc_data *c)
 			(int)(sisusb->scrbuf + sisusb->scrbuf_size - c->vc_origin));
 
 	/* Restore the screen contents */
-	memcpy((u16 *)c->vc_origin, (u16 *)c->vc_screenbuf, length);
+	memcpy((u16 *)c->vc_origin, c->vc_screenbuf, length);
 
 	sisusb_copy_memory(sisusb, (u8 *)c->vc_origin,
 			sisusb_haddr(sisusb, c, 0, 0), length);
@@ -545,7 +545,7 @@ sisusbcon_save_screen(struct vc_data *c)
 			(int)(sisusb->scrbuf + sisusb->scrbuf_size - c->vc_origin));
 
 	/* Save the screen contents to vc's private buffer */
-	memcpy((u16 *)c->vc_screenbuf, (u16 *)c->vc_origin, length);
+	memcpy(c->vc_screenbuf, (u16 *)c->vc_origin, length);
 
 	mutex_unlock(&sisusb->lock);
 }

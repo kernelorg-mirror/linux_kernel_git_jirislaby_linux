@@ -638,7 +638,7 @@ static int vgacon_switch(struct vc_data *c)
 	 * otherwise we get into VGA BIOS */
 
 	if (!vga_is_gfx) {
-		scr_memcpyw((u16 *) c->vc_origin, (u16 *) c->vc_screenbuf,
+		scr_memcpyw((u16 *) c->vc_origin, c->vc_screenbuf,
 			    c->vc_screenbuf_size > vga_vram_size ?
 				vga_vram_size : c->vc_screenbuf_size);
 
@@ -1135,7 +1135,7 @@ static void vgacon_save_screen(struct vc_data *c)
 	 * or we'll be copying in VGA BIOS */
 
 	if (!vga_is_gfx)
-		scr_memcpyw((u16 *) c->vc_screenbuf, (u16 *) c->vc_origin,
+		scr_memcpyw(c->vc_screenbuf, (u16 *) c->vc_origin,
 			    c->vc_screenbuf_size > vga_vram_size ? vga_vram_size : c->vc_screenbuf_size);
 }
 

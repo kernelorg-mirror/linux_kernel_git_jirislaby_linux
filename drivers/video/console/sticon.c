@@ -98,7 +98,7 @@ static void sticon_putcs(struct vc_data *conp, const unsigned short *s,
 
 static void sticon_cursor(struct vc_data *conp, int mode)
 {
-    unsigned short car1;
+    u16 car1;
 
     /* no cursor update if screen is blanked */
     if (vga_is_gfx || console_blanked)

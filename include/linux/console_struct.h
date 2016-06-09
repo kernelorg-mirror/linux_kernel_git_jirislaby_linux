@@ -107,7 +107,7 @@ struct vc_data {
 	unsigned long	vc_visible_origin;	/* [!] Top of visible window */
 	unsigned int	vc_top, vc_bottom;	/* Scrolling region */
 	const struct consw *vc_sw;
-	unsigned short	*vc_screenbuf;		/* In-memory character/attribute buffer */
+	u16 		*vc_screenbuf;		/* In-memory character/attribute buffer */
 	unsigned int	vc_screenbuf_size;
 	unsigned char	vc_mode;		/* KD_TEXT, ... */
 	/* attributes for all characters on screen */
