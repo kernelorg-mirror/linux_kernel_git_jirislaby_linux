@@ -641,19 +641,18 @@ static void con_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 	scr_memsetw(clear, vc->vc_video_erase_char, vc->vc_size_row * nr);
 }
 
-static void do_update_region(struct vc_data *vc, unsigned long start, int count)
+static void do_update_region(struct vc_data *vc, u16 *start, int count)
 {
 	unsigned int xx, yy, offset;
-	u16 *p;
+	u16 *p = start;
 
-	p = (u16 *) start;
 	if (!vc->vc_sw->con_getxy) {
-		offset = (start - vc->vc_origin) / 2;
+		offset = start - (u16 *)vc->vc_origin;
 		xx = offset % vc->vc_cols;
 		yy = offset / vc->vc_cols;
 	} else {
 		int nxx, nyy;
-		start = (ulong)vc->vc_sw->con_getxy(vc, (u16 *)start, &nxx, &nyy);
+		start = vc->vc_sw->con_getxy(vc, start, &nxx, &nyy);
 		xx = nxx; yy = nyy;
 	}
 	for(;;) {
@@ -679,22 +678,23 @@ static void do_update_region(struct vc_data *vc, unsigned long start, int count)
 		xx = 0;
 		yy++;
 		if (vc->vc_sw->con_getxy) {
-			p = (u16 *)start;
-			start = (ulong)vc->vc_sw->con_getxy(vc, (u16 *)start, NULL, NULL);
+			p = start;
+			start = vc->vc_sw->con_getxy(vc, start, NULL, NULL);
 		}
 	}
 }
 
-void update_region(struct vc_data *vc, unsigned long start, int count)
+void vc_update_region(struct vc_data *vc, u16 *start, int count)
 {
 	WARN_CONSOLE_UNLOCKED();
 
 	if (con_should_update(vc)) {
 		hide_cursor(vc);
-		do_update_region(vc, start, count);
+		do_update_region(vc, (u16 *)start, count);
 		set_cursor(vc);
 	}
 }
+EXPORT_SYMBOL(vc_update_region);
 
 /* Structure of attributes is hardware-dependent */
 
@@ -797,7 +797,7 @@ void invert_screen(struct vc_data *vc, int offset, int count, bool viewed)
 	}
 
 	if (con_should_update(vc))
-		do_update_region(vc, (unsigned long) p, count);
+		do_update_region(vc, p, count);
 	notify_update(vc);
 }
 
@@ -846,8 +846,7 @@ static void insert_char(struct vc_data *vc, unsigned int nr)
 	scr_memsetw(p, vc->vc_video_erase_char, nr * 2);
 	vc->vc_need_wrap = 0;
 	if (con_should_update(vc))
-		do_update_region(vc, (unsigned long) p,
-			vc->vc_cols - vc->state.x);
+		do_update_region(vc, p, vc->vc_cols - vc->state.x);
 }
 
 static void delete_char(struct vc_data *vc, unsigned int nr)
@@ -860,8 +859,7 @@ static void delete_char(struct vc_data *vc, unsigned int nr)
 			nr * 2);
 	vc->vc_need_wrap = 0;
 	if (con_should_update(vc))
-		do_update_region(vc, (unsigned long) p,
-			vc->vc_cols - vc->state.x);
+		do_update_region(vc, p, vc->vc_cols - vc->state.x);
 }
 
 static int softcursor_original = -1;
@@ -1031,7 +1029,8 @@ void redraw_screen(struct vc_data *vc, int is_switch)
 		}
 
 		if (update && vc->vc_mode != KD_GRAPHICS)
-			do_update_region(vc, vc->vc_origin, vc->vc_screenbuf_size / 2);
+			do_update_region(vc, (u16 *)vc->vc_origin,
+					vc->vc_screenbuf_size / 2);
 	}
 	set_cursor(vc);
 	if (is_switch) {
@@ -1563,7 +1562,7 @@ static void csi_J(struct vc_data *vc, int vpar)
 	}
 	scr_memsetw(start, vc->vc_video_erase_char, 2 * count);
 	if (con_should_update(vc))
-		do_update_region(vc, (unsigned long) start, count);
+		do_update_region(vc, start, count);
 	vc->vc_need_wrap = 0;
 }
 
@@ -1593,7 +1592,7 @@ static void csi_K(struct vc_data *vc, int vpar)
 	scr_memsetw(start + offset, vc->vc_video_erase_char, 2 * count);
 	vc->vc_need_wrap = 0;
 	if (con_should_update(vc))
-		do_update_region(vc, (unsigned long)(start + offset), count);
+		do_update_region(vc, start + offset, count);
 }
 
 /* erase the following vpar positions */
@@ -2507,7 +2506,8 @@ static void do_con_trol(struct tty_struct *tty, struct vc_data *vc, int c)
 			csi_J(vc, 2);
 			vc->vc_video_erase_char =
 				(vc->vc_video_erase_char & 0xff00) | ' ';
-			do_update_region(vc, vc->vc_origin, vc->vc_screenbuf_size / 2);
+			do_update_region(vc, (u16 *)vc->vc_origin,
+					vc->vc_screenbuf_size / 2);
 		}
 		return;
 	case ESsetG0:
@@ -4793,7 +4793,6 @@ EXPORT_SYMBOL(color_table);
 EXPORT_SYMBOL(default_red);
 EXPORT_SYMBOL(default_grn);
 EXPORT_SYMBOL(default_blu);
-EXPORT_SYMBOL(update_region);
 EXPORT_SYMBOL(redraw_screen);
 EXPORT_SYMBOL(vc_resize);
 EXPORT_SYMBOL(fg_console);

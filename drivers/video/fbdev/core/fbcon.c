@@ -2150,8 +2150,8 @@ static int fbcon_switch(struct vc_data *vc)
 		logo_shown = fg_console;
 		/* This is protected above by initmem_freed */
 		fb_show_logo(info, ops->rotate);
-		update_region(vc,
-			      vc->vc_origin + vc->vc_size_row * vc->vc_top,
+		vc_update_region(vc,
+			      (u16 *)vc->vc_origin + vc->vc_cols * vc->vc_top,
 			      vc->vc_size_row * (vc->vc_bottom -
 						 vc->vc_top) / 2);
 		return 0;
