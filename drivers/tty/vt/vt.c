@@ -653,7 +653,7 @@ static void do_update_region(struct vc_data *vc, unsigned long start, int count)
 		yy = offset / vc->vc_cols;
 	} else {
 		int nxx, nyy;
-		start = vc->vc_sw->con_getxy(vc, start, &nxx, &nyy);
+		start = (ulong)vc->vc_sw->con_getxy(vc, (u16 *)start, &nxx, &nyy);
 		xx = nxx; yy = nyy;
 	}
 	for(;;) {
@@ -680,7 +680,7 @@ static void do_update_region(struct vc_data *vc, unsigned long start, int count)
 		yy++;
 		if (vc->vc_sw->con_getxy) {
 			p = (u16 *)start;
-			start = vc->vc_sw->con_getxy(vc, start, NULL, NULL);
+			start = (ulong)vc->vc_sw->con_getxy(vc, (u16 *)start, NULL, NULL);
 		}
 	}
 }

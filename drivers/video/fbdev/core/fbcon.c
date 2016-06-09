@@ -2547,22 +2547,21 @@ static u16 *fbcon_screen_pos(const struct vc_data *vc, int offset)
 	return (u16 *) (vc->vc_origin + offset);
 }
 
-static unsigned long fbcon_getxy(struct vc_data *vc, unsigned long pos,
-				 int *px, int *py)
+static u16 *fbcon_getxy(struct vc_data *vc, u16 *pos, int *px, int *py)
 {
-	unsigned long ret;
+	u16 *ret;
 	int x, y;
 
-	if (pos >= vc->vc_origin && pos < vc->vc_scr_end) {
-		unsigned long offset = (pos - vc->vc_origin) / 2;
+	if (pos >= (u16 *)vc->vc_origin && pos < (u16 *)vc->vc_scr_end) {
+		unsigned long offset = pos - (u16 *)vc->vc_origin;
 
 		x = offset % vc->vc_cols;
 		y = offset / vc->vc_cols;
-		ret = pos + (vc->vc_cols - x) * 2;
+		ret = pos + vc->vc_cols - x;
 	} else {
 		/* Should not happen */
 		x = y = 0;
-		ret = vc->vc_origin;
+		ret = (u16 *)vc->vc_origin;
 	}
 	if (px)
 		*px = x;

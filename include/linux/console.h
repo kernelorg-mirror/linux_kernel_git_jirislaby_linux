@@ -40,6 +40,7 @@ enum vc_intensity;
  * @con_set_palette: sets the palette of the console to @table (optional)
  * @con_scrolldelta: the contents of the console should be scrolled by @lines.
  *		     Invoked by user. (optional)
+ * @con_getxy: compute @x and @y from @pos, return pointer to the next line
  */
 struct consw {
 	struct module *owner;
@@ -74,7 +75,7 @@ struct consw {
 			bool blink, bool underline, bool reverse, bool italic);
 	void	(*con_invert_region)(struct vc_data *vc, u16 *p, int count);
 	u16    *(*con_screen_pos)(const struct vc_data *vc, int offset);
-	unsigned long (*con_getxy)(struct vc_data *vc, unsigned long position,
+	u16    *(*con_getxy)(struct vc_data *vc, u16 *position,
 			int *px, int *py);
 	/*
 	 * Flush the video console driver's scrollback buffer
