@@ -811,18 +811,17 @@ static void say_next_line(struct vc_data *vc)
 	say_line(vc);
 }
 
-static int say_from_to(struct vc_data *vc, u_long from, u_long to,
-		       int read_punc)
+static int say_from_to(struct vc_data *vc, u16 *from, u16 *to, int read_punc)
 {
 	int i = 0;
 	u_char tmp;
 	u_short saved_punc_mask = spk_punc_mask;
 
 	spk_old_attr = spk_attr;
-	spk_attr = get_attributes(vc, (u_short *)from);
+	spk_attr = get_attributes(vc, from);
 	while (from < to) {
-		buf[i++] = get_char(vc, (u_short *)from, &tmp);
-		from += 2;
+		buf[i++] = get_char(vc, from, &tmp);
+		from++;
 		if (i >= vc->vc_size_row)
 			break;
 	}
@@ -844,10 +843,10 @@ static int say_from_to(struct vc_data *vc, u_long from, u_long to,
 static void say_line_from_to(struct vc_data *vc, u_long from, u_long to,
 			     int read_punc)
 {
-	u_long start = vc->vc_origin + (spk_y * vc->vc_size_row);
-	u_long end = start + (to * 2);
+	u16 *start = (u16 *)vc->vc_origin + (spk_y * vc->vc_cols);
+	u16 *end = start + to;
 
-	start += from * 2;
+	start += from;
 	if (say_from_to(vc, start, end, read_punc) <= 0)
 		if (cursor_track != read_all_mode)
 			synth_printf("%s\n", spk_msg_get(MSG_BLANK));
@@ -879,7 +878,7 @@ static int say_sentence_num(int num, int prev)
 
 static int get_sentence_buf(struct vc_data *vc, int read_punc)
 {
-	u_long start, end;
+	u16 *start, *end;
 	int i, bn;
 	u_char tmp;
 
@@ -887,17 +886,17 @@ static int get_sentence_buf(struct vc_data *vc, int read_punc)
 	if (currbuf == 2)
 		currbuf = 0;
 	bn = currbuf;
-	start = vc->vc_origin + ((spk_y) * vc->vc_size_row);
-	end = vc->vc_origin + ((spk_y) * vc->vc_size_row) + vc->vc_cols * 2;
+	start = (u16 *)vc->vc_origin + spk_y * vc->vc_cols;
+	end = (u16 *)vc->vc_origin + spk_y * vc->vc_cols + vc->vc_cols;
 
 	numsentences[bn] = 0;
 	sentmarks[bn][0] = &sentbuf[bn][0];
 	i = 0;
 	spk_old_attr = spk_attr;
-	spk_attr = get_attributes(vc, (u_short *)start);
+	spk_attr = get_attributes(vc, start);
 
 	while (start < end) {
-		sentbuf[bn][i] = get_char(vc, (u_short *)start, &tmp);
+		sentbuf[bn][i] = get_char(vc, start, &tmp);
 		if (i > 0) {
 			if (sentbuf[bn][i] == SPACE &&
 			    sentbuf[bn][i - 1] == '.' &&
@@ -909,7 +908,7 @@ static int get_sentence_buf(struct vc_data *vc, int read_punc)
 			}
 		}
 		i++;
-		start += 2;
+		start++;
 		if (i >= vc->vc_size_row)
 			break;
 	}
@@ -928,18 +927,25 @@ static int get_sentence_buf(struct vc_data *vc, int read_punc)
 	return numsentences[bn];
 }
 
+/**
+ * say_screen_from_to - read contents of the console
+ *
+ * @vc: console to read from
+ * @from: offset in lines from the beginning of the screen to start from
+ * @to: offset in lines from the beginning of the screen where to stop
+ */
 static void say_screen_from_to(struct vc_data *vc, u_long from, u_long to)
 {
-	u_long start = vc->vc_origin, end;
+	u16 *start = (u16 *)vc->vc_origin, *end, *endl;
 
 	if (from > 0)
-		start += from * vc->vc_size_row;
+		start += from * vc->vc_cols;
 	if (to > vc->vc_rows)
 		to = vc->vc_rows;
-	end = vc->vc_origin + (to * vc->vc_size_row);
-	for (from = start; from < end; from = to) {
-		to = from + vc->vc_size_row;
-		say_from_to(vc, from, to, 1);
+	end = (u16 *)vc->vc_origin + to * vc->vc_cols;
+	for (; start < end; start = endl) {
+		endl = start + vc->vc_cols;
+		say_from_to(vc, start, endl, 1);
 	}
 }
 
@@ -950,26 +956,26 @@ static void say_screen(struct vc_data *vc)
 
 static void speakup_win_say(struct vc_data *vc)
 {
-	u_long start, end, from, to;
+	u16 *start, *end, *from, *to;
 
 	if (win_start < 2) {
 		synth_printf("%s\n", spk_msg_get(MSG_NO_WINDOW));
 		return;
 	}
-	start = vc->vc_origin + (win_top * vc->vc_size_row);
-	end = vc->vc_origin + (win_bottom * vc->vc_size_row);
+	start = (u16 *)vc->vc_origin + win_top * vc->vc_cols;
+	end = (u16 *)vc->vc_origin + win_bottom * vc->vc_cols;
 	while (start <= end) {
-		from = start + (win_left * 2);
-		to = start + (win_right * 2);
+		from = start + win_left;
+		to = start + win_right;
 		say_from_to(vc, from, to, 1);
-		start += vc->vc_size_row;
+		start += vc->vc_cols;
 	}
 }
 
 static void top_edge(struct vc_data *vc)
 {
 	spk_parked |= 0x01;
-	spk_pos = vc->vc_origin + 2 * spk_x;
+	spk_pos = (ulong)((u16 *)vc->vc_origin + spk_x);
 	spk_y = 0;
 	say_line(vc);
 }
@@ -2013,7 +2019,8 @@ do_goto:
 		say_word(vc);
 	} else {
 		spk_y = goto_pos;
-		spk_pos = vc->vc_origin + (goto_pos * vc->vc_size_row);
+		spk_pos = (ulong)((u16 *)vc->vc_origin +
+				(goto_pos * vc->vc_cols));
 		say_line(vc);
 	}
 	return 1;
