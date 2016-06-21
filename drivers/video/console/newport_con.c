@@ -602,10 +602,8 @@ static bool newport_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 	if (dir == SM_UP) {
 		x = 0;
 		y = t;
-		s = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * (t + lines));
-		d = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * t);
+		s = vc->vc_origin + vc->vc_cols * (t + lines);
+		d = vc->vc_origin + vc->vc_cols * t;
 		while (count--) {
 			chattr = scr_readw(s++);
 			if (chattr != scr_readw(d)) {
@@ -618,8 +616,7 @@ static bool newport_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 				y++;
 			}
 		}
-		d = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * (b - lines));
+		d = vc->vc_origin + vc->vc_cols * (b - lines);
 		x = 0;
 		y = b - lines;
 		for (count = 0; count < (lines * vc->vc_cols); count++) {
@@ -637,10 +634,8 @@ static bool newport_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 	} else {
 		x = vc->vc_cols - 1;
 		y = b - 1;
-		s = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * (b - lines) - 2);
-		d = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * b - 2);
+		s = vc->vc_origin + vc->vc_cols * (b - lines) - 2;
+		d = vc->vc_origin + vc->vc_cols * b - 2;
 		while (count--) {
 			chattr = scr_readw(s--);
 			if (chattr != scr_readw(d)) {
@@ -653,8 +648,7 @@ static bool newport_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 				y--;
 			}
 		}
-		d = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row * t);
+		d = vc->vc_origin + vc->vc_cols * t;
 		x = 0;
 		y = t;
 		for (count = 0; count < (lines * vc->vc_cols); count++) {

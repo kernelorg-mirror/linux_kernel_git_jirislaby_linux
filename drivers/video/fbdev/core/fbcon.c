@@ -592,8 +592,7 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 		erase &= ~0x400;
 	logo_height = fb_prepare_logo(info, ops->rotate);
 	logo_lines = DIV_ROUND_UP(logo_height, vc->vc_font.height);
-	q = (unsigned short *) (vc->vc_origin +
-				vc->vc_size_row * rows);
+	q = vc->vc_origin + vc->vc_cols * rows;
 	step = logo_lines * cols;
 	for (r = q - logo_lines * cols; r < q; r++)
 		if (scr_readw(r) != vc->vc_video_erase_char)
@@ -627,9 +626,7 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 			vc->vc_pos += lines * vc->vc_cols;
 		}
 	}
-	scr_memsetw((unsigned short *) vc->vc_origin,
-		    erase,
-		    vc->vc_size_row * logo_lines);
+	scr_memsetw(vc->vc_origin, erase, vc->vc_size_row * logo_lines);
 
 	if (con_is_visible(vc) && vc->vc_mode == KD_TEXT) {
 		fbcon_clear_margins(vc, 0);
@@ -637,9 +634,7 @@ static void fbcon_prepare_logo(struct vc_data *vc, struct fb_info *info,
 	}
 
 	if (save) {
-		q = (unsigned short *) (vc->vc_origin +
-					vc->vc_size_row *
-					rows);
+		q = vc->vc_origin + vc->vc_cols * rows;
 		scr_memcpyw(q, save, array3_size(logo_lines, new_cols, 2));
 		vc->state.y += logo_lines;
 		vc->vc_pos += logo_lines * vc->vc_cols;
@@ -1546,8 +1541,7 @@ static __inline__ void ypan_down_redraw(struct vc_data *vc, int t, int count)
 static void fbcon_redraw_move(struct vc_data *vc, struct fbcon_display *p,
 			      int line, int count, int dy)
 {
-	unsigned short *s = (unsigned short *)
-		(vc->vc_origin + vc->vc_size_row * line);
+	u16 *s = vc->vc_origin + vc->vc_cols * line;
 
 	while (count--) {
 		unsigned short *start = s;
@@ -1581,9 +1575,8 @@ static void fbcon_redraw_blit(struct vc_data *vc, struct fb_info *info,
 			struct fbcon_display *p, int line, int count, int ycount)
 {
 	int offset = ycount * vc->vc_cols;
-	unsigned short *d = (unsigned short *)
-	    (vc->vc_origin + vc->vc_size_row * line);
-	unsigned short *s = d + offset;
+	u16 *d = vc->vc_origin + vc->vc_cols * line;
+	u16 *s = d + offset;
 	struct fbcon_ops *ops = info->fbcon_par;
 
 	while (count--) {
@@ -1630,9 +1623,8 @@ static void fbcon_redraw_blit(struct vc_data *vc, struct fb_info *info,
 static void fbcon_redraw(struct vc_data *vc, struct fbcon_display *p,
 			 int line, int count, int offset)
 {
-	unsigned short *d = (unsigned short *)
-	    (vc->vc_origin + vc->vc_size_row * line);
-	unsigned short *s = d + offset;
+	u16 *d = vc->vc_origin + vc->vc_cols * line;
+	u16 *s = d + offset;
 
 	while (count--) {
 		unsigned short *start = s;
@@ -1711,9 +1703,7 @@ static bool fbcon_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 			fbcon_redraw_blit(vc, info, p, t, b - t - count,
 				     count);
 			fbcon_clear(vc, b - count, 0, count, vc->vc_cols);
-			scr_memsetw((unsigned short *) (vc->vc_origin +
-							vc->vc_size_row *
-							(b - count)),
+			scr_memsetw(vc->vc_origin + vc->vc_cols * (b - count),
 				    vc->vc_video_erase_char,
 				    vc->vc_size_row * count);
 			return true;
@@ -1782,9 +1772,7 @@ static bool fbcon_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 			fbcon_redraw(vc, p, t, b - t - count,
 				     count * vc->vc_cols);
 			fbcon_clear(vc, b - count, 0, count, vc->vc_cols);
-			scr_memsetw((unsigned short *) (vc->vc_origin +
-							vc->vc_size_row *
-							(b - count)),
+			scr_memsetw(vc->vc_origin + vc->vc_cols * (b - count),
 				    vc->vc_video_erase_char,
 				    vc->vc_size_row * count);
 			return true;
@@ -1801,9 +1789,7 @@ static bool fbcon_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 			fbcon_redraw_blit(vc, info, p, b - 1, b - t - count,
 				     -count);
 			fbcon_clear(vc, t, 0, count, vc->vc_cols);
-			scr_memsetw((unsigned short *) (vc->vc_origin +
-							vc->vc_size_row *
-							t),
+			scr_memsetw(vc->vc_origin + vc->vc_cols * t,
 				    vc->vc_video_erase_char,
 				    vc->vc_size_row * count);
 			return true;
@@ -1870,9 +1856,7 @@ static bool fbcon_scroll(struct vc_data *vc, unsigned int t, unsigned int b,
 			fbcon_redraw(vc, p, b - 1, b - t - count,
 				     -count * vc->vc_cols);
 			fbcon_clear(vc, t, 0, count, vc->vc_cols);
-			scr_memsetw((unsigned short *) (vc->vc_origin +
-							vc->vc_size_row *
-							t),
+			scr_memsetw(vc->vc_origin + vc->vc_cols * t,
 				    vc->vc_video_erase_char,
 				    vc->vc_size_row * count);
 			return true;
@@ -2150,8 +2134,7 @@ static int fbcon_switch(struct vc_data *vc)
 		logo_shown = fg_console;
 		/* This is protected above by initmem_freed */
 		fb_show_logo(info, ops->rotate);
-		vc_update_region(vc,
-			      (u16 *)vc->vc_origin + vc->vc_cols * vc->vc_top,
+		vc_update_region(vc, vc->vc_origin + vc->vc_cols * vc->vc_top,
 			      vc->vc_size_row * (vc->vc_bottom -
 						 vc->vc_top) / 2);
 		return 0;
@@ -2315,8 +2298,7 @@ static void set_vc_hi_font(struct vc_data *vc, bool set)
 			
 		/* ++Edmund: reorder the attribute bits */
 		if (vc->vc_can_do_color) {
-			unsigned short *cp =
-			    (unsigned short *) vc->vc_origin;
+			u16 *cp = vc->vc_origin;
 			int count = vc->vc_screenbuf_size / 2;
 			unsigned short c;
 			for (; count > 0; count--, cp++) {
@@ -2338,8 +2320,7 @@ static void set_vc_hi_font(struct vc_data *vc, bool set)
 			
 		/* ++Edmund: reorder the attribute bits */
 		{
-			unsigned short *cp =
-			    (unsigned short *) vc->vc_origin;
+			u16 *cp = vc->vc_origin;
 			int count = vc->vc_screenbuf_size / 2;
 			unsigned short c;
 			for (; count > 0; count--, cp++) {
@@ -2544,7 +2525,7 @@ static void fbcon_set_palette(struct vc_data *vc, const unsigned char *table)
 
 static u16 *fbcon_screen_pos(const struct vc_data *vc, int offset)
 {
-	return (u16 *) (vc->vc_origin + offset);
+	return vc->vc_origin + offset / 2;
 }
 
 static u16 *fbcon_getxy(struct vc_data *vc, u16 *pos, int *px, int *py)
@@ -2552,8 +2533,8 @@ static u16 *fbcon_getxy(struct vc_data *vc, u16 *pos, int *px, int *py)
 	u16 *ret;
 	int x, y;
 
-	if (pos >= (u16 *)vc->vc_origin && pos < (u16 *)vc->vc_scr_end) {
-		unsigned long offset = pos - (u16 *)vc->vc_origin;
+	if (pos >= vc->vc_origin && pos < (u16 *)vc->vc_scr_end) {
+		unsigned long offset = pos - vc->vc_origin;
 
 		x = offset % vc->vc_cols;
 		y = offset / vc->vc_cols;
@@ -2561,7 +2542,7 @@ static u16 *fbcon_getxy(struct vc_data *vc, u16 *pos, int *px, int *py)
 	} else {
 		/* Should not happen */
 		x = y = 0;
-		ret = (u16 *)vc->vc_origin;
+		ret = vc->vc_origin;
 	}
 	if (px)
 		*px = x;

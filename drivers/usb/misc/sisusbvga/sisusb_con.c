@@ -349,16 +349,16 @@ sisusbcon_invert_region(struct vc_data *vc, u16 *p, int count)
 static inline void *sisusb_vaddr(const struct sisusb_usb_data *sisusb,
 		const struct vc_data *c, unsigned int x, unsigned int y)
 {
-	return (u16 *)c->vc_origin + y * sisusb->sisusb_num_columns + x;
+	return c->vc_origin + y * sisusb->sisusb_num_columns + x;
 }
 
 static inline unsigned long sisusb_haddr(const struct sisusb_usb_data *sisusb,
 	      const struct vc_data *c, unsigned int x, unsigned int y)
 {
-	unsigned long offset = c->vc_origin - (ulong)sisusb->scrbuf;
+	ptrdiff_t offset = c->vc_origin - sisusb->scrbuf;
 
-	/* 2 bytes per each character */
-	offset += 2 * (y * sisusb->sisusb_num_columns + x);
+	offset += y * sisusb->sisusb_num_columns + x;
+	offset *= 2; /* 2 bytes per each character */
 
 	return sisusb->vrambase + offset;
 }
@@ -497,7 +497,7 @@ sisusbcon_switch(struct vc_data *c)
 	 * being called while the vc is using its private buffer
 	 * as origin.
 	 */
-	if (c->vc_origin == (unsigned long)c->vc_screenbuf) {
+	if (c->vc_origin == c->vc_screenbuf) {
 		mutex_unlock(&sisusb->lock);
 		dev_dbg(&sisusb->sisusb_dev->dev, "ASSERT ORIGIN != SCREENBUF!\n");
 		return 0;
@@ -509,7 +509,7 @@ sisusbcon_switch(struct vc_data *c)
 			(void *)c->vc_origin);
 
 	/* Restore the screen contents */
-	memcpy((u16 *)c->vc_origin, c->vc_screenbuf, length);
+	memcpy(c->vc_origin, c->vc_screenbuf, length);
 
 	sisusb_copy_memory(sisusb, (u8 *)c->vc_origin,
 			sisusb_haddr(sisusb, c, 0, 0), length);
@@ -547,7 +547,7 @@ sisusbcon_save_screen(struct vc_data *c)
 			(void *)c->vc_origin);
 
 	/* Save the screen contents to vc's private buffer */
-	memcpy(c->vc_screenbuf, (u16 *)c->vc_origin, length);
+	memcpy(c->vc_screenbuf, c->vc_origin, length);
 
 	mutex_unlock(&sisusb->lock);
 }
@@ -615,7 +615,7 @@ sisusbcon_blank(struct vc_data *c, int blank, int mode_switch)
 
 	case 1:		/* Normal blanking: Clear screen */
 	case -1:
-		sisusbcon_memsetw((u16 *)c->vc_origin,
+		sisusbcon_memsetw(c->vc_origin,
 				c->vc_video_erase_char,
 				c->vc_screenbuf_size);
 		sisusb_copy_memory(sisusb, (u8 *)c->vc_origin,
@@ -713,8 +713,8 @@ sisusbcon_cursor(struct vc_data *c, int mode)
 		return;
 	}
 
-	if (c->vc_origin != c->vc_visible_origin) {
-		c->vc_visible_origin = c->vc_origin;
+	if (c->vc_origin != (u16 *)c->vc_visible_origin) {
+		c->vc_visible_origin = (ulong)c->vc_origin;
 		sisusbcon_set_start_address(sisusb, c);
 	}
 
@@ -844,8 +844,8 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	if (t || b != c->vc_rows)
 		return sisusbcon_scroll_area(c, sisusb, t, b, dir, lines);
 
-	if (c->vc_origin != c->vc_visible_origin) {
-		c->vc_visible_origin = c->vc_origin;
+	if (c->vc_origin != (u16 *)c->vc_visible_origin) {
+		c->vc_visible_origin = (ulong)c->vc_origin;
 		sisusbcon_set_start_address(sisusb, c);
 	}
 
@@ -853,7 +853,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	if (lines > c->vc_rows)
 		lines = c->vc_rows;
 
-	oldorigin = c->vc_origin;
+	oldorigin = (ulong)c->vc_origin;
 
 	switch (dir) {
 
@@ -864,14 +864,14 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 			memcpy(sisusb->scrbuf,
 					  (u16 *)(oldorigin + delta),
 					  c->vc_screenbuf_size - delta);
-			c->vc_origin = (ulong)sisusb->scrbuf;
+			c->vc_origin = sisusb->scrbuf;
 			sisusb->con_rolled_over = oldorigin - (ulong)sisusb->scrbuf;
 			copyall = 1;
 		} else
-			c->vc_origin += delta;
+			c->vc_origin += delta / 2;
 
 		sisusbcon_memsetw(
-			(u16 *)(c->vc_origin + c->vc_screenbuf_size - delta),
+			c->vc_origin + (c->vc_screenbuf_size - delta) / 2,
 					eattr, delta);
 
 		break;
@@ -883,17 +883,17 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 					c->vc_screenbuf_size + delta,
 					(u16 *)oldorigin,
 					c->vc_screenbuf_size - delta);
-			c->vc_origin = (ulong)sisusb->scrbuf +
+			c->vc_origin = (void *)sisusb->scrbuf +
 					sisusb->scrbuf_size -
 					c->vc_screenbuf_size;
 			sisusb->con_rolled_over = 0;
 			copyall = 1;
 		} else
-			c->vc_origin -= delta;
+			c->vc_origin -= delta / 2;
 
-		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
+		c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
 
-		scr_memsetw((u16 *)(c->vc_origin), eattr, delta);
+		scr_memsetw(c->vc_origin, eattr, delta);
 
 		break;
 	}
@@ -915,12 +915,12 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 			sisusb_haddr(sisusb, c, 0, 0),
 			delta);
 
-	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
-	c->vc_visible_origin = c->vc_origin;
+	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+	c->vc_visible_origin = (ulong)c->vc_origin;
 
 	sisusbcon_set_start_address(sisusb, c);
 
-	c->vc_pos += (c->vc_origin - oldorigin) / 2;
+	c->vc_pos += c->vc_origin - (u16 *)oldorigin;
 
 	mutex_unlock(&sisusb->lock);
 
@@ -949,7 +949,8 @@ sisusbcon_set_origin(struct vc_data *c)
 		return 0;
 	}
 
-	c->vc_origin = c->vc_visible_origin = (ulong)sisusb->scrbuf;
+	c->vc_visible_origin = (ulong)sisusb->scrbuf;
+	c->vc_origin = sisusb->scrbuf;
 
 	sisusbcon_set_start_address(sisusb, c);
 

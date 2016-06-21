@@ -165,7 +165,7 @@ static inline void vga_set_mem_top(struct vc_data *c)
 
 static void vgacon_restore_screen(struct vc_data *c)
 {
-	if (c->vc_origin != c->vc_visible_origin)
+	if (c->vc_origin != (u16 *)c->vc_visible_origin)
 		vgacon_scrolldelta(c, 0);
 }
 
@@ -639,7 +639,7 @@ static int vgacon_switch(struct vc_data *c)
 	 * otherwise we get into VGA BIOS */
 
 	if (!vga_is_gfx) {
-		scr_memcpyw((u16 *) c->vc_origin, c->vc_screenbuf,
+		scr_memcpyw(c->vc_origin, c->vc_screenbuf,
 			    c->vc_screenbuf_size > vga_vram_size ?
 				vga_vram_size : c->vc_screenbuf_size);
 
@@ -1111,7 +1111,8 @@ static int vgacon_set_origin(struct vc_data *c)
 	if (vga_is_gfx ||	/* We don't play origin tricks in graphic modes */
 	    (console_blanked && !vga_palette_blanked))	/* Nor we write to blanked screens */
 		return 0;
-	c->vc_origin = c->vc_visible_origin = (ulong)vga_vram_base;
+	c->vc_visible_origin = (ulong)vga_vram_base;
+	c->vc_origin = vga_vram_base;
 	vga_set_mem_top(c);
 	vga_rolled_over = 0;
 	return 1;
@@ -1135,7 +1136,7 @@ static void vgacon_save_screen(struct vc_data *c)
 	 * or we'll be copying in VGA BIOS */
 
 	if (!vga_is_gfx)
-		scr_memcpyw(c->vc_screenbuf, (u16 *) c->vc_origin,
+		scr_memcpyw(c->vc_screenbuf, c->vc_origin,
 			    c->vc_screenbuf_size > vga_vram_size ? vga_vram_size : c->vc_screenbuf_size);
 }
 
@@ -1152,37 +1153,35 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 		return false;
 
 	vgacon_restore_screen(c);
-	oldo = (u16 *)c->vc_origin;
+	oldo = c->vc_origin;
 	delta = lines * c->vc_cols;
 	if (dir == SM_UP) {
 		if ((u16 *)c->vc_scr_end + delta >= vga_vram_end) {
 			scr_memcpyw(vga_vram_base, oldo + delta,
 				    c->vc_screenbuf_size - delta * 2);
-			c->vc_origin = (ulong)vga_vram_base;
+			c->vc_origin = vga_vram_base;
 			vga_rolled_over = (oldo - vga_vram_base) * 2;
 		} else
-			c->vc_origin += delta * 2;
-		scr_memsetw((u16 *)c->vc_origin + c->vc_screenbuf_size / 2 -
-				     delta, c->vc_video_erase_char,
-			    delta * 2);
+			c->vc_origin += delta;
+		scr_memsetw(c->vc_origin + c->vc_screenbuf_size / 2 - delta,
+				c->vc_video_erase_char, delta * 2);
 	} else {
 		if (oldo - delta < vga_vram_base) {
 			scr_memmovew(vga_vram_end -
 					      c->vc_screenbuf_size / 2 +
 					      delta, oldo,
 				     c->vc_screenbuf_size - delta * 2);
-			c->vc_origin = (ulong)vga_vram_end - c->vc_screenbuf_size;
+			c->vc_origin = vga_vram_end - c->vc_screenbuf_size / 2;
 			vga_rolled_over = 0;
 		} else
-			c->vc_origin -= delta * 2;
-		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
-		scr_memsetw((u16 *) (c->vc_origin), c->vc_video_erase_char,
-			    delta * 2);
+			c->vc_origin -= delta;
+		c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+		scr_memsetw(c->vc_origin, c->vc_video_erase_char, delta * 2);
 	}
-	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
-	c->vc_visible_origin = c->vc_origin;
+	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+	c->vc_visible_origin = (ulong)c->vc_origin;
 	vga_set_mem_top(c);
-	c->vc_pos += (u16 *)c->vc_origin - oldo;
+	c->vc_pos += c->vc_origin - oldo;
 	return true;
 }
 

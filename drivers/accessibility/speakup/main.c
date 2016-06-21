@@ -256,7 +256,7 @@ static struct notifier_block vt_notifier_block = {
 
 static unsigned char get_attributes(struct vc_data *vc, u16 *pos)
 {
-	pos = screen_pos(vc, pos - (u16 *)vc->vc_origin, true);
+	pos = screen_pos(vc, pos - vc->vc_origin, true);
 	return (scr_readw(pos) & ~vc->vc_hi_font_mask) >> 8;
 }
 
@@ -461,7 +461,7 @@ static u16 get_char(struct vc_data *vc, u16 *pos, u_char *attribs)
 		u16 w;
 		u16 c;
 
-		pos = screen_pos(vc, pos - (u16 *)vc->vc_origin, true);
+		pos = screen_pos(vc, pos - vc->vc_origin, true);
 		w = scr_readw(pos);
 		c = w & 0xff;
 
@@ -843,7 +843,7 @@ static int say_from_to(struct vc_data *vc, u16 *from, u16 *to, int read_punc)
 static void say_line_from_to(struct vc_data *vc, u_long from, u_long to,
 			     int read_punc)
 {
-	u16 *start = (u16 *)vc->vc_origin + (spk_y * vc->vc_cols);
+	u16 *start = vc->vc_origin + (spk_y * vc->vc_cols);
 	u16 *end = start + to;
 
 	start += from;
@@ -886,8 +886,8 @@ static int get_sentence_buf(struct vc_data *vc, int read_punc)
 	if (currbuf == 2)
 		currbuf = 0;
 	bn = currbuf;
-	start = (u16 *)vc->vc_origin + spk_y * vc->vc_cols;
-	end = (u16 *)vc->vc_origin + spk_y * vc->vc_cols + vc->vc_cols;
+	start = vc->vc_origin + spk_y * vc->vc_cols;
+	end = vc->vc_origin + spk_y * vc->vc_cols + vc->vc_cols;
 
 	numsentences[bn] = 0;
 	sentmarks[bn][0] = &sentbuf[bn][0];
@@ -936,13 +936,13 @@ static int get_sentence_buf(struct vc_data *vc, int read_punc)
  */
 static void say_screen_from_to(struct vc_data *vc, u_long from, u_long to)
 {
-	u16 *start = (u16 *)vc->vc_origin, *end, *endl;
+	u16 *start = vc->vc_origin, *end, *endl;
 
 	if (from > 0)
 		start += from * vc->vc_cols;
 	if (to > vc->vc_rows)
 		to = vc->vc_rows;
-	end = (u16 *)vc->vc_origin + to * vc->vc_cols;
+	end = vc->vc_origin + to * vc->vc_cols;
 	for (; start < end; start = endl) {
 		endl = start + vc->vc_cols;
 		say_from_to(vc, start, endl, 1);
@@ -962,8 +962,8 @@ static void speakup_win_say(struct vc_data *vc)
 		synth_printf("%s\n", spk_msg_get(MSG_NO_WINDOW));
 		return;
 	}
-	start = (u16 *)vc->vc_origin + win_top * vc->vc_cols;
-	end = (u16 *)vc->vc_origin + win_bottom * vc->vc_cols;
+	start = vc->vc_origin + win_top * vc->vc_cols;
+	end = vc->vc_origin + win_bottom * vc->vc_cols;
 	while (start <= end) {
 		from = start + win_left;
 		to = start + win_right;
@@ -975,7 +975,7 @@ static void speakup_win_say(struct vc_data *vc)
 static void top_edge(struct vc_data *vc)
 {
 	spk_parked |= 0x01;
-	spk_pos = (ulong)((u16 *)vc->vc_origin + spk_x);
+	spk_pos = (ulong)(vc->vc_origin + spk_x);
 	spk_y = 0;
 	say_line(vc);
 }
@@ -1613,7 +1613,7 @@ static int count_highlight_color(struct vc_data *vc)
 	int cc;
 	int vc_num = vc->vc_num;
 	u16 ch;
-	u16 *start = (u16 *)vc->vc_origin;
+	u16 *start = vc->vc_origin;
 
 	for (i = 0; i < 8; i++)
 		speakup_console[vc_num]->ht.bgcount[i] = 0;
@@ -2019,8 +2019,7 @@ do_goto:
 		say_word(vc);
 	} else {
 		spk_y = goto_pos;
-		spk_pos = (ulong)((u16 *)vc->vc_origin +
-				(goto_pos * vc->vc_cols));
+		spk_pos = (ulong)(vc->vc_origin + goto_pos * vc->vc_cols);
 		say_line(vc);
 	}
 	return 1;
