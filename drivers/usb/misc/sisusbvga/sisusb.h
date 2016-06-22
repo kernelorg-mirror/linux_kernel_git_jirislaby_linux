@@ -128,7 +128,7 @@ struct sisusb_usb_data {
 	unsigned short chiprevision;
 #ifdef CONFIG_USB_SISUSBVGA_CON
 	struct SiS_Private *SiS_Pr;
-	unsigned long scrbuf;
+	u16 *scrbuf;
 	unsigned int scrbuf_size;
 	int haveconsole, con_first, con_last;
 	int havethisconsole[MAX_NR_CONSOLES];

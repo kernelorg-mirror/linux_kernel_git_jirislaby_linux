@@ -98,7 +98,7 @@ sisusb_initialize(struct sisusb_usb_data *sisusb)
 static inline void
 sisusbcon_set_start_address(struct sisusb_usb_data *sisusb, struct vc_data *c)
 {
-	sisusb->cur_start_addr = (c->vc_visible_origin - sisusb->scrbuf) / 2;
+	sisusb->cur_start_addr = (u16 *)c->vc_visible_origin - sisusb->scrbuf;
 
 	sisusb_setidxreg(sisusb, SISCR, 0x0c, (sisusb->cur_start_addr >> 8));
 	sisusb_setidxreg(sisusb, SISCR, 0x0d, (sisusb->cur_start_addr & 0xff));
@@ -355,7 +355,7 @@ static inline void *sisusb_vaddr(const struct sisusb_usb_data *sisusb,
 static inline unsigned long sisusb_haddr(const struct sisusb_usb_data *sisusb,
 	      const struct vc_data *c, unsigned int x, unsigned int y)
 {
-	unsigned long offset = c->vc_origin - sisusb->scrbuf;
+	unsigned long offset = c->vc_origin - (ulong)sisusb->scrbuf;
 
 	/* 2 bytes per each character */
 	offset += 2 * (y * sisusb->sisusb_num_columns + x);
@@ -504,8 +504,9 @@ sisusbcon_switch(struct vc_data *c)
 	}
 
 	/* Check that we don't copy too much */
-	length = min((int)c->vc_screenbuf_size,
-			(int)(sisusb->scrbuf + sisusb->scrbuf_size - c->vc_origin));
+	length = min_t(int, c->vc_screenbuf_size,
+			(void *)sisusb->scrbuf + sisusb->scrbuf_size -
+			(void *)c->vc_origin);
 
 	/* Restore the screen contents */
 	memcpy((u16 *)c->vc_origin, c->vc_screenbuf, length);
@@ -541,8 +542,9 @@ sisusbcon_save_screen(struct vc_data *c)
 	}
 
 	/* Check that we don't copy too much */
-	length = min((int)c->vc_screenbuf_size,
-			(int)(sisusb->scrbuf + sisusb->scrbuf_size - c->vc_origin));
+	length = min_t(int, c->vc_screenbuf_size,
+			(void *)sisusb->scrbuf + sisusb->scrbuf_size -
+			(void *)c->vc_origin);
 
 	/* Save the screen contents to vc's private buffer */
 	memcpy(c->vc_screenbuf, (u16 *)c->vc_origin, length);
@@ -686,7 +688,7 @@ sisusbcon_scrolldelta(struct vc_data *c, int lines)
 	}
 
 	vc_scrolldelta_helper(c, lines, sisusb->con_rolled_over,
-			(void *)sisusb->scrbuf, sisusb->scrbuf_size);
+			sisusb->scrbuf, sisusb->scrbuf_size);
 
 	sisusbcon_set_start_address(sisusb, c);
 
@@ -858,12 +860,12 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	case SM_UP:
 
 		if (c->vc_scr_end + delta >=
-				sisusb->scrbuf + sisusb->scrbuf_size) {
-			memcpy((u16 *)sisusb->scrbuf,
+				(ulong)sisusb->scrbuf + sisusb->scrbuf_size) {
+			memcpy(sisusb->scrbuf,
 					  (u16 *)(oldorigin + delta),
 					  c->vc_screenbuf_size - delta);
-			c->vc_origin = sisusb->scrbuf;
-			sisusb->con_rolled_over = oldorigin - sisusb->scrbuf;
+			c->vc_origin = (ulong)sisusb->scrbuf;
+			sisusb->con_rolled_over = oldorigin - (ulong)sisusb->scrbuf;
 			copyall = 1;
 		} else
 			c->vc_origin += delta;
@@ -876,12 +878,12 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 
 	case SM_DOWN:
 
-		if (oldorigin - delta < sisusb->scrbuf) {
+		if (oldorigin - delta < (ulong)sisusb->scrbuf) {
 			memmove((void *)sisusb->scrbuf + sisusb->scrbuf_size -
 					c->vc_screenbuf_size + delta,
 					(u16 *)oldorigin,
 					c->vc_screenbuf_size - delta);
-			c->vc_origin = sisusb->scrbuf +
+			c->vc_origin = (ulong)sisusb->scrbuf +
 					sisusb->scrbuf_size -
 					c->vc_screenbuf_size;
 			sisusb->con_rolled_over = 0;
@@ -947,7 +949,7 @@ sisusbcon_set_origin(struct vc_data *c)
 		return 0;
 	}
 
-	c->vc_origin = c->vc_visible_origin = sisusb->scrbuf;
+	c->vc_origin = c->vc_visible_origin = (ulong)sisusb->scrbuf;
 
 	sisusbcon_set_start_address(sisusb, c);
 
@@ -1414,7 +1416,8 @@ sisusb_console_init(struct sisusb_usb_data *sisusb, int first, int last)
 	sisusb->scrbuf_size = 32 * 1024;
 
 	/* Allocate screen buffer */
-	if (!(sisusb->scrbuf = (unsigned long)vmalloc(sisusb->scrbuf_size))) {
+	sisusb->scrbuf = vmalloc(sisusb->scrbuf_size);
+	if (!sisusb->scrbuf) {
 		mutex_unlock(&sisusb->lock);
 		dev_err(&sisusb->sisusb_dev->dev, "Failed to allocate screen buffer\n");
 		return 1;
@@ -1480,8 +1483,8 @@ sisusb_console_exit(struct sisusb_usb_data *sisusb)
 		sisusb->haveconsole = 0;
 	}
 
-	vfree((void *)sisusb->scrbuf);
-	sisusb->scrbuf = 0;
+	vfree(sisusb->scrbuf);
+	sisusb->scrbuf = NULL;
 
 	vfree(sisusb->font_backup);
 	sisusb->font_backup = NULL;
