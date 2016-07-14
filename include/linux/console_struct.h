@@ -104,7 +104,7 @@ struct vc_data {
 	unsigned int	vc_cell_height;		/* CRTC character cell height */
 	u16		*vc_origin;		/* [!] Start of real screen */
 	unsigned long	vc_scr_end;		/* [!] End of real screen */
-	unsigned long	vc_visible_origin;	/* [!] Top of visible window */
+	u16		*vc_visible_origin;	/* [!] Top of visible window */
 	unsigned int	vc_top, vc_bottom;	/* Scrolling region */
 	const struct consw *vc_sw;
 	u16 		*vc_screenbuf;		/* In-memory character/attribute buffer */

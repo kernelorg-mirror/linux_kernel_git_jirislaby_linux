@@ -454,7 +454,7 @@ static void newport_cursor(struct vc_data *vc, int mode)
 		treg = newport_vc2_get(npregs, VC2_IREG_CONTROL);
 		newport_vc2_set(npregs, VC2_IREG_CONTROL,
 				(treg | VC2_CTRL_ECDISP));
-		xcurs = vc->vc_pos - (u16 *)vc->vc_visible_origin;
+		xcurs = vc->vc_pos - vc->vc_visible_origin;
 		ycurs = ((xcurs / vc->vc_cols) << 4) + 31;
 		xcurs = ((xcurs % vc->vc_cols) << 3) + xcurs_correction;
 		newport_vc2_set(npregs, VC2_IREG_CURSX, xcurs);

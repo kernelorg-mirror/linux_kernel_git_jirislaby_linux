@@ -98,7 +98,7 @@ sisusb_initialize(struct sisusb_usb_data *sisusb)
 static inline void
 sisusbcon_set_start_address(struct sisusb_usb_data *sisusb, struct vc_data *c)
 {
-	sisusb->cur_start_addr = (u16 *)c->vc_visible_origin - sisusb->scrbuf;
+	sisusb->cur_start_addr = c->vc_visible_origin - sisusb->scrbuf;
 
 	sisusb_setidxreg(sisusb, SISCR, 0x0c, (sisusb->cur_start_addr >> 8));
 	sisusb_setidxreg(sisusb, SISCR, 0x0d, (sisusb->cur_start_addr & 0xff));
@@ -713,8 +713,8 @@ sisusbcon_cursor(struct vc_data *c, int mode)
 		return;
 	}
 
-	if (c->vc_origin != (u16 *)c->vc_visible_origin) {
-		c->vc_visible_origin = (ulong)c->vc_origin;
+	if (c->vc_origin != c->vc_visible_origin) {
+		c->vc_visible_origin = c->vc_origin;
 		sisusbcon_set_start_address(sisusb, c);
 	}
 
@@ -844,8 +844,8 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	if (t || b != c->vc_rows)
 		return sisusbcon_scroll_area(c, sisusb, t, b, dir, lines);
 
-	if (c->vc_origin != (u16 *)c->vc_visible_origin) {
-		c->vc_visible_origin = (ulong)c->vc_origin;
+	if (c->vc_origin != c->vc_visible_origin) {
+		c->vc_visible_origin = c->vc_origin;
 		sisusbcon_set_start_address(sisusb, c);
 	}
 
@@ -916,7 +916,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 			delta);
 
 	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
-	c->vc_visible_origin = (ulong)c->vc_origin;
+	c->vc_visible_origin = c->vc_origin;
 
 	sisusbcon_set_start_address(sisusb, c);
 
@@ -949,7 +949,7 @@ sisusbcon_set_origin(struct vc_data *c)
 		return 0;
 	}
 
-	c->vc_visible_origin = (ulong)sisusb->scrbuf;
+	c->vc_visible_origin = sisusb->scrbuf;
 	c->vc_origin = sisusb->scrbuf;
 
 	sisusbcon_set_start_address(sisusb, c);

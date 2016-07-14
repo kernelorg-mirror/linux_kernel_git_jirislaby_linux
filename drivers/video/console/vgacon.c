@@ -160,12 +160,12 @@ static inline void write_vga(unsigned char reg, unsigned int val)
 
 static inline void vga_set_mem_top(struct vc_data *c)
 {
-	write_vga(12, (u16 *)c->vc_visible_origin - vga_vram_base);
+	write_vga(12, c->vc_visible_origin - vga_vram_base);
 }
 
 static void vgacon_restore_screen(struct vc_data *c)
 {
-	if (c->vc_origin != (u16 *)c->vc_visible_origin)
+	if (c->vc_origin != c->vc_visible_origin)
 		vgacon_scrolldelta(c, 0);
 }
 
@@ -404,7 +404,7 @@ static void vgacon_deinit(struct vc_data *c)
 {
 	/* When closing the active console, reset video origin */
 	if (con_is_visible(c)) {
-		c->vc_visible_origin = (ulong)vga_vram_base;
+		c->vc_visible_origin = vga_vram_base;
 		vga_set_mem_top(c);
 	}
 
@@ -1111,8 +1111,7 @@ static int vgacon_set_origin(struct vc_data *c)
 	if (vga_is_gfx ||	/* We don't play origin tricks in graphic modes */
 	    (console_blanked && !vga_palette_blanked))	/* Nor we write to blanked screens */
 		return 0;
-	c->vc_visible_origin = (ulong)vga_vram_base;
-	c->vc_origin = vga_vram_base;
+	c->vc_origin = c->vc_visible_origin = vga_vram_base;
 	vga_set_mem_top(c);
 	vga_rolled_over = 0;
 	return 1;
@@ -1179,7 +1178,7 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 		scr_memsetw(c->vc_origin, c->vc_video_erase_char, delta * 2);
 	}
 	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
-	c->vc_visible_origin = (ulong)c->vc_origin;
+	c->vc_visible_origin = c->vc_origin;
 	vga_set_mem_top(c);
 	c->vc_pos += c->vc_origin - oldo;
 	return true;

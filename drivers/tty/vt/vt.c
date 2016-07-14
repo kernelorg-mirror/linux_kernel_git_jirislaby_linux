@@ -291,7 +291,7 @@ static inline unsigned short *screenpos(const struct vc_data *vc, int offset,
 	if (!viewed)
 		p = vc->vc_origin + offset / 2;
 	else if (!vc->vc_sw->con_screen_pos)
-		p = (unsigned short *)(vc->vc_visible_origin + offset);
+		p = vc->vc_visible_origin + offset / 2;
 	else
 		p = vc->vc_sw->con_screen_pos(vc, offset);
 	return p;
@@ -927,7 +927,7 @@ static void set_origin(struct vc_data *vc)
 	    !vc->vc_sw->con_set_origin ||
 	    !vc->vc_sw->con_set_origin(vc))
 		vc->vc_origin = vc->vc_screenbuf;
-	vc->vc_visible_origin = (unsigned long)vc->vc_origin;
+	vc->vc_visible_origin = vc->vc_origin;
 	vc->vc_scr_end = (unsigned long)vc->vc_origin + vc->vc_screenbuf_size;
 	vc->vc_pos = vc->vc_origin + vc->state.y * vc->vc_cols + vc->state.x;
 }
@@ -4747,7 +4747,6 @@ void vcs_scr_updated(struct vc_data *vc)
 void vc_scrolldelta_helper(struct vc_data *c, int lines,
 		unsigned int rolled_over, void *base, unsigned int size)
 {
-	unsigned long ubase = (unsigned long)base;
 	ptrdiff_t scr_end = (void *)c->vc_scr_end - base;
 	ptrdiff_t vorigin = (void *)c->vc_visible_origin - base;
 	ptrdiff_t origin = (void *)c->vc_origin - base;
@@ -4756,7 +4755,7 @@ void vc_scrolldelta_helper(struct vc_data *c, int lines,
 
 	/* Turn scrollback off */
 	if (!lines) {
-		c->vc_visible_origin = (unsigned long)c->vc_origin;
+		c->vc_visible_origin = c->vc_origin;
 		return;
 	}
 
@@ -4780,7 +4779,7 @@ void vc_scrolldelta_helper(struct vc_data *c, int lines,
 	if (from_off > avail - margin)
 		from_off = avail;
 
-	c->vc_visible_origin = ubase + (from + from_off) % wrap;
+	c->vc_visible_origin = base + (from + from_off) % wrap;
 }
 EXPORT_SYMBOL_GPL(vc_scrolldelta_helper);
 
