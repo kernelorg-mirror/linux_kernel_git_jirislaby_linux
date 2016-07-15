@@ -928,7 +928,7 @@ static void set_origin(struct vc_data *vc)
 	    !vc->vc_sw->con_set_origin(vc))
 		vc->vc_origin = vc->vc_screenbuf;
 	vc->vc_visible_origin = vc->vc_origin;
-	vc->vc_scr_end = (unsigned long)vc->vc_origin + vc->vc_screenbuf_size;
+	vc->vc_scr_end = vc->vc_origin + vc->vc_screenbuf_size / 2;
 	vc->vc_pos = vc->vc_origin + vc->state.y * vc->vc_cols + vc->state.x;
 }
 
@@ -1539,7 +1539,7 @@ static void csi_J(struct vc_data *vc, int vpar)
 					     vc->vc_cols - vc->state.x);
 			vc_uniscr_clear_lines(vc, vc->state.y + 1,
 					      vc->vc_rows - vc->state.y - 1);
-			count = (vc->vc_scr_end - (ulong)vc->vc_pos) >> 1;
+			count = vc->vc_scr_end - vc->vc_pos;
 			start = vc->vc_pos;
 			break;
 		case 1:	/* erase from start to cursor */

@@ -2533,7 +2533,7 @@ static u16 *fbcon_getxy(struct vc_data *vc, u16 *pos, int *px, int *py)
 	u16 *ret;
 	int x, y;
 
-	if (pos >= vc->vc_origin && pos < (u16 *)vc->vc_scr_end) {
+	if (pos >= vc->vc_origin && pos < vc->vc_scr_end) {
 		unsigned long offset = pos - vc->vc_origin;
 
 		x = offset % vc->vc_cols;

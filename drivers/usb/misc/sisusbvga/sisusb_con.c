@@ -859,7 +859,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 
 	case SM_UP:
 
-		if (c->vc_scr_end + delta >=
+		if ((ulong)c->vc_scr_end + delta >=
 				(ulong)sisusb->scrbuf + sisusb->scrbuf_size) {
 			memcpy(sisusb->scrbuf,
 					  (u16 *)(oldorigin + delta),
@@ -891,7 +891,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 		} else
 			c->vc_origin -= delta / 2;
 
-		c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size / 2;
 
 		scr_memsetw(c->vc_origin, eattr, delta);
 
@@ -915,7 +915,7 @@ sisusbcon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 			sisusb_haddr(sisusb, c, 0, 0),
 			delta);
 
-	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size / 2;
 	c->vc_visible_origin = c->vc_origin;
 
 	sisusbcon_set_start_address(sisusb, c);

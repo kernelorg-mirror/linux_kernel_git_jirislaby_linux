@@ -1155,7 +1155,7 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 	oldo = c->vc_origin;
 	delta = lines * c->vc_cols;
 	if (dir == SM_UP) {
-		if ((u16 *)c->vc_scr_end + delta >= vga_vram_end) {
+		if (c->vc_scr_end + delta >= vga_vram_end) {
 			scr_memcpyw(vga_vram_base, oldo + delta,
 				    c->vc_screenbuf_size - delta * 2);
 			c->vc_origin = vga_vram_base;
@@ -1174,10 +1174,10 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 			vga_rolled_over = 0;
 		} else
 			c->vc_origin -= delta;
-		c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size / 2;
 		scr_memsetw(c->vc_origin, c->vc_video_erase_char, delta * 2);
 	}
-	c->vc_scr_end = (ulong)c->vc_origin + c->vc_screenbuf_size;
+	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size / 2;
 	c->vc_visible_origin = c->vc_origin;
 	vga_set_mem_top(c);
 	c->vc_pos += c->vc_origin - oldo;
