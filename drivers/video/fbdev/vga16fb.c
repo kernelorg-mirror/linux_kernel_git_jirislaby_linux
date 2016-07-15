@@ -1321,7 +1321,7 @@ static int vga16fb_probe(struct platform_device *dev)
 	}
 
 	/* XXX share VGA_FB_PHYS and I/O region with vgacon and others */
-	info->screen_base = (void __iomem *)VGA_MAP_MEM(VGA_FB_PHYS, 0);
+	info->screen_buffer = VGA_MAP_MEM(VGA_FB_PHYS, 0);
 
 	if (!info->screen_base) {
 		printk(KERN_ERR "vga16fb: unable to map device\n");

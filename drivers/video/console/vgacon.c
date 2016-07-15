@@ -318,7 +318,7 @@ static const char *vgacon_startup(void)
 		}
 	}
 
-	vga_vram_base = (u16 *)VGA_MAP_MEM(vram_phys, vga_vram_size);
+	vga_vram_base = VGA_MAP_MEM(vram_phys, vga_vram_size);
 	vga_vram_end = (void *)vga_vram_base + vga_vram_size;
 
 	/*
@@ -867,10 +867,10 @@ static int vgacon_do_font_op(struct vgastate *state, char *arg, int set,
 	char *charmap;
 	bool clear_attribs = false;
 	if (vga_video_type != VIDEO_TYPE_EGAM) {
-		charmap = (char *) VGA_MAP_MEM(colourmap, 0);
+		charmap = VGA_MAP_MEM(colourmap, 0);
 		beg = 0x0e;
 	} else {
-		charmap = (char *) VGA_MAP_MEM(blackwmap, 0);
+		charmap = VGA_MAP_MEM(blackwmap, 0);
 		beg = 0x0a;
 	}
 

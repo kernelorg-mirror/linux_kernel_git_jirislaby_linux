@@ -48,9 +48,9 @@ static inline void scr_memsetw(u16 *s, u16 v, unsigned int n)
 #endif /* !CONFIG_VGA_CONSOLE && !CONFIG_MDA_CONSOLE */
 
 #ifdef __powerpc64__
-#define VGA_MAP_MEM(x,s) ((unsigned long) ioremap((x), s))
+#define VGA_MAP_MEM(x,s) ioremap((x), s)
 #else
-#define VGA_MAP_MEM(x,s) (x)
+#define VGA_MAP_MEM(x,s) (void __iomem *)(unsigned long)(x)
 #endif
 
 #define vga_readb(x) (*(x))

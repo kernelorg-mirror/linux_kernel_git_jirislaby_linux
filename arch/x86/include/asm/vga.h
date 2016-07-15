@@ -24,7 +24,7 @@
 	if (IS_ENABLED(CONFIG_AMD_MEM_ENCRYPT))			\
 		set_memory_decrypted(start, (s) >> PAGE_SHIFT);	\
 								\
-	start;							\
+	(void __force *)start;				\
 })
 
 #define vga_readb(x) (*(x))

@@ -78,6 +78,6 @@ extern struct pci_controller *pci_vga_hose;
 # define FIXUP_MEMADDR_VGA(a)
 #endif /* CONFIG_VGA_HOSE */
 
-#define VGA_MAP_MEM(x,s)	((unsigned long) ioremap(x, s))
+#define VGA_MAP_MEM(x,s)	ioremap(x, s)
 
 #endif

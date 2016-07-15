@@ -323,7 +323,7 @@ static const char *mdacon_startup(void)
 	mda_num_lines   = 25;
 
 	mda_vram_len  = 0x01000;
-	mda_vram_base = (u16 *)VGA_MAP_MEM(0xb0000, mda_vram_len);
+	mda_vram_base = VGA_MAP_MEM(0xb0000, mda_vram_len);
 
 	mda_index_port  = 0x3b4;
 	mda_value_port  = 0x3b5;

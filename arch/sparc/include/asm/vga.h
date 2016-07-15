@@ -55,6 +55,6 @@ static inline void scr_memmovew(u16 *d, u16 *s, unsigned int n)
 	memmove(d, s, n);
 }
 
-#define VGA_MAP_MEM(x,s) (x)
+#define VGA_MAP_MEM(x,s) (void __iomem *)(x)
 
 #endif
