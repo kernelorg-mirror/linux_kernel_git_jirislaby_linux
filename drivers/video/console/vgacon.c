@@ -1142,8 +1142,8 @@ static void vgacon_save_screen(struct vc_data *c)
 static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 		enum con_scroll dir, unsigned int lines)
 {
-	unsigned long oldo;
 	unsigned int delta;
+	u16 *oldo;
 
 	if (t || b != c->vc_rows || vga_is_gfx || c->vc_mode != KD_TEXT)
 		return false;
@@ -1152,38 +1152,37 @@ static bool vgacon_scroll(struct vc_data *c, unsigned int t, unsigned int b,
 		return false;
 
 	vgacon_restore_screen(c);
-	oldo = c->vc_origin;
-	delta = lines * c->vc_size_row;
+	oldo = (u16 *)c->vc_origin;
+	delta = lines * c->vc_cols;
 	if (dir == SM_UP) {
-		if (c->vc_scr_end + delta >= vga_vram_end) {
-			scr_memcpyw((u16 *) vga_vram_base,
-				    (u16 *) (oldo + delta),
-				    c->vc_screenbuf_size - delta);
+		if ((u16 *)c->vc_scr_end + delta >= (u16 *)vga_vram_end) {
+			scr_memcpyw((u16 *) vga_vram_base, oldo + delta,
+				    c->vc_screenbuf_size - delta * 2);
 			c->vc_origin = vga_vram_base;
-			vga_rolled_over = oldo - vga_vram_base;
+			vga_rolled_over = (oldo - (u16 *)vga_vram_base) * 2;
 		} else
-			c->vc_origin += delta;
-		scr_memsetw((u16 *) (c->vc_origin + c->vc_screenbuf_size -
-				     delta), c->vc_video_erase_char,
-			    delta);
+			c->vc_origin += delta * 2;
+		scr_memsetw((u16 *)c->vc_origin + c->vc_screenbuf_size / 2 -
+				     delta, c->vc_video_erase_char,
+			    delta * 2);
 	} else {
-		if (oldo - delta < vga_vram_base) {
-			scr_memmovew((u16 *) (vga_vram_end -
-					      c->vc_screenbuf_size +
-					      delta), (u16 *) oldo,
-				     c->vc_screenbuf_size - delta);
+		if (oldo - delta < (u16 *)vga_vram_base) {
+			scr_memmovew((u16 *)vga_vram_end -
+					      c->vc_screenbuf_size / 2 +
+					      delta, oldo,
+				     c->vc_screenbuf_size - delta * 2);
 			c->vc_origin = vga_vram_end - c->vc_screenbuf_size;
 			vga_rolled_over = 0;
 		} else
-			c->vc_origin -= delta;
+			c->vc_origin -= delta * 2;
 		c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
 		scr_memsetw((u16 *) (c->vc_origin), c->vc_video_erase_char,
-			    delta);
+			    delta * 2);
 	}
 	c->vc_scr_end = c->vc_origin + c->vc_screenbuf_size;
 	c->vc_visible_origin = c->vc_origin;
 	vga_set_mem_top(c);
-	c->vc_pos += (c->vc_origin - oldo) / 2;
+	c->vc_pos += (u16 *)c->vc_origin - oldo;
 	return true;
 }
 
