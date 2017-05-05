@@ -124,7 +124,8 @@ void show_trace_log_lvl(struct task_struct *task, struct pt_regs *regs,
 			if (regs && stack == &regs->ip)
 				goto next;
 
-			if (stack == ret_addr_p)
+			if (stack == ret_addr_p ||
+					(ret_addr_p && addr == *ret_addr_p))
 				reliable = 1;
 
 			/*
