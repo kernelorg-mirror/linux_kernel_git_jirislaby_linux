@@ -127,6 +127,7 @@ obj-$(CONFIG_PERF_EVENTS)		+= perf_regs.o
 obj-$(CONFIG_TRACING)			+= tracepoint.o
 obj-$(CONFIG_SCHED_MC_PRIO)		+= itmt.o
 
+obj-$(CONFIG_DWARF_UNWIND)		+= unwind_dwarf.o
 obj-$(CONFIG_ORC_UNWINDER)		+= unwind_orc.o
 obj-$(CONFIG_FRAME_POINTER_UNWINDER)	+= unwind_frame.o
 obj-$(CONFIG_GUESS_UNWINDER)		+= unwind_guess.o

@@ -12,7 +12,14 @@ struct unwind_state {
 	struct task_struct *task;
 	int graph_idx;
 	bool error;
-#if defined(CONFIG_ORC_UNWINDER)
+#ifdef CONFIG_DWARF_UNWIND
+	union {
+		struct pt_regs regs;
+		char regs_arr[sizeof(struct pt_regs)];
+	} u;
+	unsigned long dw_sp;
+	unsigned call_frame:1;
+#elif defined(CONFIG_ORC_UNWINDER)
 	bool signal, full_regs;
 	unsigned long sp, bp, ip;
 	struct pt_regs *regs;
@@ -50,7 +57,22 @@ void unwind_start(struct unwind_state *state, struct task_struct *task,
 	__unwind_start(state, task, regs, first_frame);
 }
 
-#if defined(CONFIG_ORC_UNWINDER) || defined(CONFIG_FRAME_POINTER_UNWINDER)
+#ifdef CONFIG_DWARF_UNWIND
+
+#include <asm/dwarf.h>
+
+static inline struct pt_regs *unwind_get_entry_regs(struct unwind_state *state)
+{
+	if (unwind_done(state))
+		return NULL;
+
+	/*
+	 * Should we return something? If we return the registers here, they
+	 * are output for every frame.
+	 */
+	return NULL;
+}
+#elif defined(CONFIG_ORC_UNWINDER) || defined(CONFIG_FRAME_POINTER_UNWINDER)
 static inline struct pt_regs *unwind_get_entry_regs(struct unwind_state *state)
 {
 	if (unwind_done(state))
