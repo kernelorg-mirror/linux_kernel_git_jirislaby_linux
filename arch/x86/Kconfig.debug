@@ -410,7 +410,7 @@ config GUESS_UNWINDER
 endchoice
 
 config FRAME_POINTER
-	depends on !ORC_UNWINDER && !GUESS_UNWINDER
+	depends on !ORC_UNWINDER && !DWARF_UNWIND && !GUESS_UNWINDER
 	bool
 
 endmenu
