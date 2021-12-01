@@ -478,11 +478,11 @@ static void mxser_dtr_rts(struct tty_port *port, bool active)
 	spin_unlock_irqrestore(&mp->slock, flags);
 }
 
-static int mxser_set_baud(struct tty_struct *tty, speed_t newspd)
+static int mxser_set_baud(struct mxser_port *info, struct ktermios *termios)
 {
-	struct mxser_port *info = tty->driver_data;
 	unsigned int quot = 0, baud;
 	unsigned char cval;
+	speed_t newspd = tty_termios_baud_rate(termios);
 	u64 timeout;
 
 	if (newspd > info->board->max_baud)
@@ -490,13 +490,13 @@ static int mxser_set_baud(struct tty_struct *tty, speed_t newspd)
 
 	if (newspd == 134) {
 		quot = 2 * MXSER_BAUD_BASE / 269;
-		tty_encode_baud_rate(tty, 134, 134);
+		tty_termios_encode_baud_rate(termios, 134, 134);
 	} else if (newspd) {
 		quot = MXSER_BAUD_BASE / newspd;
 		if (quot == 0)
 			quot = 1;
 		baud = MXSER_BAUD_BASE / quot;
-		tty_encode_baud_rate(tty, baud, baud);
+		tty_termios_encode_baud_rate(termios, baud, baud);
 	} else {
 		quot = 0;
 	}
@@ -526,7 +526,7 @@ static int mxser_set_baud(struct tty_struct *tty, speed_t newspd)
 	outb(quot >> 8, info->ioaddr + UART_DLM);	/* MS of divisor */
 	outb(cval, info->ioaddr + UART_LCR);	/* reset DLAB */
 
-	if (C_BAUD(tty) == BOTHER) {
+	if ((termios->c_cflag & CBAUD) == BOTHER) {
 		quot = MXSER_BAUD_BASE % newspd;
 		quot *= 8;
 		if (quot % newspd > newspd / 2) {
@@ -569,24 +569,24 @@ static void mxser_handle_cts(struct tty_struct *tty, struct mxser_port *info,
  * This routine is called to set the UART divisor registers to match
  * the specified baud rate for a serial port.
  */
-static void mxser_change_speed(struct tty_struct *tty,
+static void mxser_change_speed(struct tty_struct *tty, struct ktermios *termios,
 			       const struct ktermios *old_termios)
 {
 	struct mxser_port *info = tty->driver_data;
 	unsigned cflag, cval;
 
-	cflag = tty->termios.c_cflag;
+	cflag = termios->c_cflag;
 
-	if (mxser_set_baud(tty, tty_get_baud_rate(tty))) {
+	if (mxser_set_baud(info, termios)) {
 		/* Use previous rate on a failure */
 		if (old_termios) {
 			speed_t baud = tty_termios_baud_rate(old_termios);
-			tty_encode_baud_rate(tty, baud, baud);
+			tty_termios_encode_baud_rate(termios, baud, baud);
 		}
 	}
 
 	/* byte size and parity */
-	cval = UART_LCR_WLEN(tty_get_char_size(tty->termios.c_cflag));
+	cval = UART_LCR_WLEN(tty_get_char_size(termios->c_cflag));
 
 	if (cflag & CSTOPB)
 		cval |= UART_LCR_STOP;
@@ -643,21 +643,21 @@ static void mxser_change_speed(struct tty_struct *tty,
 	 * Set up parity check flag
 	 */
 	info->read_status_mask = UART_LSR_OE | UART_LSR_THRE | UART_LSR_DR;
-	if (I_INPCK(tty))
+	if (termios->c_iflag & INPCK)
 		info->read_status_mask |= UART_LSR_FE | UART_LSR_PE;
-	if (I_BRKINT(tty) || I_PARMRK(tty))
+	if ((termios->c_iflag & BRKINT) || (termios->c_iflag & PARMRK))
 		info->read_status_mask |= UART_LSR_BI;
 
 	info->ignore_status_mask = 0;
 
-	if (I_IGNBRK(tty)) {
+	if (termios->c_iflag & IGNBRK) {
 		info->ignore_status_mask |= UART_LSR_BI;
 		info->read_status_mask |= UART_LSR_BI;
 		/*
 		 * If we're ignore parity and break indicators, ignore
 		 * overruns too.  (For real raw support).
 		 */
-		if (I_IGNPAR(tty)) {
+		if (termios->c_iflag & IGNPAR) {
 			info->ignore_status_mask |=
 						UART_LSR_OE |
 						UART_LSR_PE |
@@ -669,10 +669,12 @@ static void mxser_change_speed(struct tty_struct *tty,
 		}
 	}
 	if (info->board->must_hwid) {
-		mxser_set_must_xon1_value(info->ioaddr, START_CHAR(tty));
-		mxser_set_must_xoff1_value(info->ioaddr, STOP_CHAR(tty));
-		mxser_must_set_rx_sw_flow_control(info->ioaddr, I_IXON(tty));
-		mxser_must_set_tx_sw_flow_control(info->ioaddr, I_IXOFF(tty));
+		mxser_set_must_xon1_value(info->ioaddr, termios->c_cc[VSTART]);
+		mxser_set_must_xoff1_value(info->ioaddr, termios->c_cc[VSTOP]);
+		mxser_must_set_rx_sw_flow_control(info->ioaddr,
+				termios->c_iflag & IXON);
+		mxser_must_set_tx_sw_flow_control(info->ioaddr,
+				termios->c_iflag & IXOFF);
 	}
 
 
@@ -799,7 +801,7 @@ static int mxser_activate(struct tty_port *port, struct tty_struct *tty)
 	/*
 	 * and set the speed of the serial port
 	 */
-	mxser_change_speed(tty, NULL);
+	mxser_change_speed(tty, &tty->termios, NULL);
 	spin_unlock_irqrestore(&info->slock, flags);
 
 	return 0;
@@ -1055,7 +1057,7 @@ static int mxser_set_serial_info(struct tty_struct *tty,
 	if (tty_port_initialized(port)) {
 		if (old_speed != (port->flags & ASYNC_SPD_MASK)) {
 			spin_lock_irqsave(&info->slock, sl_flags);
-			mxser_change_speed(tty, NULL);
+			mxser_change_speed(tty, &tty->termios, NULL);
 			spin_unlock_irqrestore(&info->slock, sl_flags);
 		}
 	} else {
@@ -1350,20 +1352,21 @@ static void mxser_start(struct tty_struct *tty)
 static void mxser_set_termios(struct tty_struct *tty,
 			      const struct ktermios *old_termios)
 {
+	struct ktermios *termios = &tty->termios;
 	struct mxser_port *info = tty->driver_data;
 	unsigned long flags;
 
 	spin_lock_irqsave(&info->slock, flags);
-	mxser_change_speed(tty, old_termios);
+	mxser_change_speed(tty, termios, old_termios);
 	spin_unlock_irqrestore(&info->slock, flags);
 
-	if ((old_termios->c_cflag & CRTSCTS) && !C_CRTSCTS(tty)) {
+	if ((old_termios->c_cflag & CRTSCTS) && !(termios->c_cflag & CRTSCTS)) {
 		tty->hw_stopped = false;
 		mxser_start(tty);
 	}
 
 	/* Handle sw stopped */
-	if ((old_termios->c_iflag & IXON) && !I_IXON(tty)) {
+	if ((old_termios->c_iflag & IXON) && !(termios->c_iflag & IXON)) {
 		tty->flow.stopped = 0;
 
 		if (info->board->must_hwid) {
