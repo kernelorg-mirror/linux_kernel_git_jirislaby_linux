@@ -25,6 +25,7 @@
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/serial.h>
+#include <linux/serial_core.h>
 #include <linux/serial_reg.h>
 #include <linux/major.h>
 #include <linux/string.h>
@@ -252,6 +253,7 @@ struct mxser_board;
 
 struct mxser_port {
 	struct tty_port port;
+	struct uart_port uport;
 	struct mxser_board *board;
 
 	unsigned long ioaddr;
@@ -290,6 +292,11 @@ struct mxser_board {
 
 static DECLARE_BITMAP(mxser_boards, MXSER_BOARDS);
 static struct tty_driver *mxvar_sdriver;
+
+static inline struct mxser_port *to_mport(struct tty_port *tport)
+{
+	return container_of(tport, struct mxser_port, port);
+}
 
 static u8 __mxser_must_set_EFR(unsigned long baseio, u8 clear, u8 set,
 		bool restore_LCR)
@@ -457,14 +464,14 @@ static void __mxser_stop_tx(struct mxser_port *info)
 
 static bool mxser_carrier_raised(struct tty_port *port)
 {
-	struct mxser_port *mp = container_of(port, struct mxser_port, port);
+	struct mxser_port *mp = to_mport(port);
 
 	return inb(mp->ioaddr + UART_MSR) & UART_MSR_DCD;
 }
 
 static void mxser_dtr_rts(struct tty_port *port, bool active)
 {
-	struct mxser_port *mp = container_of(port, struct mxser_port, port);
+	struct mxser_port *mp = to_mport(port);
 	unsigned long flags;
 	u8 mcr;
 
@@ -724,7 +731,7 @@ static void mxser_disable_and_clear_FIFO(struct mxser_port *info)
 
 static int mxser_activate(struct tty_port *port, struct tty_struct *tty)
 {
-	struct mxser_port *info = container_of(port, struct mxser_port, port);
+	struct mxser_port *info = to_mport(port);
 	unsigned long flags;
 	int ret;
 
@@ -829,7 +836,7 @@ static void mxser_stop_rx(struct mxser_port *info)
  */
 static void mxser_shutdown_port(struct tty_port *port)
 {
-	struct mxser_port *info = container_of(port, struct mxser_port, port);
+	struct mxser_port *info = to_mport(port);
 	unsigned long flags;
 
 	spin_lock_irqsave(&info->slock, flags);
@@ -872,7 +879,7 @@ static void mxser_shutdown_port(struct tty_port *port)
 static int mxser_open(struct tty_struct *tty, struct file *filp)
 {
 	struct tty_port *tport = tty->port;
-	struct mxser_port *port = container_of(tport, struct mxser_port, port);
+	struct mxser_port *port = to_mport(tport);
 
 	tty->driver_data = port;
 
