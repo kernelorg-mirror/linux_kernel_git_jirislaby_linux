@@ -269,7 +269,6 @@ struct mxser_port {
 struct mxser_board {
 	unsigned int idx;
 	unsigned short nports;
-	int irq;
 	unsigned long vector;
 
 	enum mxser_must_hwid must_hwid;
@@ -865,7 +864,7 @@ static void mxser_shutdown_port(struct tty_port *port)
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	/* make sure ISR is not running while we free the buffer */
-	synchronize_irq(info->board->irq);
+	synchronize_irq(uport->irq);
 
 	tty_port_free_xmit_buf(port);
 }
@@ -992,7 +991,7 @@ static int mxser_get_serial_info(struct tty_struct *tty,
 	ss->type = uport->type;
 	ss->line = tty->index;
 	ss->port = uport->iobase;
-	ss->irq = info->board->irq;
+	ss->irq = uport->irq;
 	ss->flags = info->port.flags;
 	ss->baud_base = MXSER_BAUD_BASE;
 	ss->close_delay = close_delay;
@@ -1018,8 +1017,7 @@ static int mxser_set_serial_info(struct tty_struct *tty,
 
 	mutex_lock(&port->mutex);
 
-	if (ss->irq != info->board->irq ||
-			ss->port != uport->iobase) {
+	if (ss->irq != uport->irq || ss->port != uport->iobase) {
 		mutex_unlock(&port->mutex);
 		return -EINVAL;
 	}
@@ -1776,7 +1774,6 @@ static void mxser_initbrd(struct pci_dev *pdev, struct mxser_board *brd,
 
 	brd->nports = mxser_get_nports(pdev);
 	brd->vector = pci_resource_start(pdev, 3);
-	brd->irq = pdev->irq;
 
 	brd->must_hwid = mxser_must_get_hwid(ioaddress);
 	is_mu860 = brd->must_hwid == MOXA_MUST_MU860_HWID;
@@ -1871,7 +1868,7 @@ static int mxser_probe(struct pci_dev *pdev,
 
 	mxser_initbrd(pdev, brd, ent->driver_data & MXSER_HIGHBAUD);
 
-	retval = devm_request_irq(&pdev->dev, brd->irq, mxser_interrupt,
+	retval = devm_request_irq(&pdev->dev, pdev->irq, mxser_interrupt,
 			IRQF_SHARED, "mxser", brd);
 	if (retval) {
 		dev_err(&pdev->dev, "request irq failed");
