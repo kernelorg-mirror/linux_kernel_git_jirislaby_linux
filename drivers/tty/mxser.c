@@ -545,11 +545,12 @@ static int mxser_set_baud(struct mxser_port *info, struct ktermios *termios)
 static void mxser_handle_cts(struct tty_struct *tty, struct mxser_port *info,
 		u8 msr)
 {
+	struct uart_port *uport = &info->uport;
 	bool cts = msr & UART_MSR_CTS;
 
-	if (tty->hw_stopped) {
+	if (uport->hw_stopped) {
 		if (cts) {
-			tty->hw_stopped = false;
+			uport->hw_stopped = false;
 
 			if (!mxser_16550A_or_MUST(info))
 				__mxser_start_tx(info);
@@ -559,7 +560,7 @@ static void mxser_handle_cts(struct tty_struct *tty, struct mxser_port *info,
 	} else if (cts)
 		return;
 
-	tty->hw_stopped = true;
+	uport->hw_stopped = true;
 	if (!mxser_16550A_or_MUST(info))
 		__mxser_stop_tx(info);
 }
@@ -921,7 +922,7 @@ static ssize_t mxser_write(struct tty_struct *tty, const u8 *buf, size_t count)
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	if (!is_empty && !tty->flow.stopped)
-		if (!tty->hw_stopped || mxser_16550A_or_MUST(info))
+		if (!uport->hw_stopped || mxser_16550A_or_MUST(info))
 			mxser_start_tx(info);
 
 	return written;
@@ -945,9 +946,10 @@ static int mxser_put_char(struct tty_struct *tty, u8 ch)
 static void mxser_flush_chars(struct tty_struct *tty)
 {
 	struct mxser_port *info = tty->driver_data;
+	struct uart_port *uport = &info->uport;
 
 	if (kfifo_is_empty(&info->port.xmit_fifo) || tty->flow.stopped ||
-			(tty->hw_stopped && !mxser_16550A_or_MUST(info)))
+			(uport->hw_stopped && !mxser_16550A_or_MUST(info)))
 		return;
 
 	mxser_start_tx(info);
@@ -1384,7 +1386,7 @@ static void mxser_set_termios(struct tty_struct *tty,
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	if ((old_termios->c_cflag & CRTSCTS) && !(termios->c_cflag & CRTSCTS)) {
-		tty->hw_stopped = false;
+		uport->hw_stopped = false;
 		mxser_start(tty);
 	}
 
@@ -1605,7 +1607,7 @@ static void mxser_transmit_chars(struct tty_struct *tty, struct mxser_port *port
 	}
 
 	if (kfifo_is_empty(&port->port.xmit_fifo) || tty->flow.stopped ||
-			(tty->hw_stopped && !mxser_16550A_or_MUST(port))) {
+			(uport->hw_stopped && !mxser_16550A_or_MUST(port))) {
 		__mxser_stop_tx(port);
 		return;
 	}
