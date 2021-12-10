@@ -261,7 +261,6 @@ struct mxser_port {
 	u8 rx_high_water;
 	u8 rx_low_water;
 
-	u8 x_char;		/* xon/xoff character */
 	u8 IER;			/* Interrupt Enable Register */
 	u8 MCR;			/* Modem control register */
 	u8 FCR;			/* FIFO control register */
@@ -1315,7 +1314,7 @@ static void mxser_throttle(struct tty_struct *tty)
 			info->IER &= ~MOXA_MUST_RECV_ISR;
 			outb(info->IER, uport->iobase + UART_IER);
 		} else {
-			info->x_char = STOP_CHAR(tty);
+			uport->x_char = STOP_CHAR(tty);
 			outb(0, uport->iobase + UART_IER);
 			info->IER |= UART_IER_THRI;
 			outb(info->IER, uport->iobase + UART_IER);
@@ -1335,14 +1334,14 @@ static void mxser_unthrottle(struct tty_struct *tty)
 
 	/* startrx */
 	if (I_IXOFF(tty)) {
-		if (info->x_char)
-			info->x_char = 0;
+		if (uport->x_char)
+			uport->x_char = 0;
 		else {
 			if (info->board->must_hwid) {
 				info->IER |= MOXA_MUST_RECV_ISR;
 				outb(info->IER, uport->iobase + UART_IER);
 			} else {
-				info->x_char = START_CHAR(tty);
+				uport->x_char = START_CHAR(tty);
 				outb(0, uport->iobase + UART_IER);
 				info->IER |= UART_IER_THRI;
 				outb(info->IER, uport->iobase + UART_IER);
@@ -1614,9 +1613,9 @@ static void mxser_transmit_chars(struct tty_struct *tty, struct mxser_port *port
 	struct uart_port *uport = &port->uport;
 	int count;
 
-	if (port->x_char) {
-		outb(port->x_char, uport->iobase + UART_TX);
-		port->x_char = 0;
+	if (uport->x_char) {
+		outb(uport->x_char, uport->iobase + UART_TX);
+		uport->x_char = 0;
 		port->icount.tx++;
 		return;
 	}
