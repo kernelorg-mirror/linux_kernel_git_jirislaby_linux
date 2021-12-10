@@ -265,8 +265,6 @@ struct mxser_port {
 	u8 MCR;			/* Modem control register */
 	u8 FCR;			/* FIFO control register */
 
-	u8 read_status_mask;
-	u8 ignore_status_mask;
 	u8 xmit_fifo_size;
 };
 
@@ -646,27 +644,27 @@ static void mxser_change_speed(struct tty_struct *tty, struct ktermios *termios,
 	/*
 	 * Set up parity check flag
 	 */
-	info->read_status_mask = UART_LSR_OE | UART_LSR_THRE | UART_LSR_DR;
+	uport->read_status_mask = UART_LSR_OE | UART_LSR_THRE | UART_LSR_DR;
 	if (termios->c_iflag & INPCK)
-		info->read_status_mask |= UART_LSR_FE | UART_LSR_PE;
+		uport->read_status_mask |= UART_LSR_FE | UART_LSR_PE;
 	if ((termios->c_iflag & BRKINT) || (termios->c_iflag & PARMRK))
-		info->read_status_mask |= UART_LSR_BI;
+		uport->read_status_mask |= UART_LSR_BI;
 
-	info->ignore_status_mask = 0;
+	uport->ignore_status_mask = 0;
 
 	if (termios->c_iflag & IGNBRK) {
-		info->ignore_status_mask |= UART_LSR_BI;
-		info->read_status_mask |= UART_LSR_BI;
+		uport->ignore_status_mask |= UART_LSR_BI;
+		uport->read_status_mask |= UART_LSR_BI;
 		/*
 		 * If we're ignore parity and break indicators, ignore
 		 * overruns too.  (For real raw support).
 		 */
 		if (termios->c_iflag & IGNPAR) {
-			info->ignore_status_mask |=
+			uport->ignore_status_mask |=
 						UART_LSR_OE |
 						UART_LSR_PE |
 						UART_LSR_FE;
-			info->read_status_mask |=
+			uport->read_status_mask |=
 						UART_LSR_OE |
 						UART_LSR_PE |
 						UART_LSR_FE;
@@ -1546,8 +1544,8 @@ static u8 mxser_receive_chars_old(struct tty_struct *tty,
 		if (hwid && (status & UART_LSR_OE))
 			outb(port->FCR | UART_FCR_CLEAR_RCVR,
 					uport->iobase + UART_FCR);
-		status &= port->read_status_mask;
-		if (status & port->ignore_status_mask) {
+		status &= uport->read_status_mask;
+		if (status & uport->ignore_status_mask) {
 			if (++ignored > 100)
 				break;
 		} else {
@@ -1664,7 +1662,7 @@ static bool mxser_port_isr(struct mxser_port *port)
 		    iir == MOXA_MUST_IIR_LSR)
 			status = mxser_receive_chars(tty, port, status);
 	} else {
-		status &= port->read_status_mask;
+		status &= uport->read_status_mask;
 		if (status & UART_LSR_DR)
 			status = mxser_receive_chars(tty, port, status);
 	}
