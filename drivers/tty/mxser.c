@@ -265,7 +265,6 @@ struct mxser_port {
 	u8 MCR;			/* Modem control register */
 	u8 FCR;			/* FIFO control register */
 
-	struct async_icount icount; /* kernel counters for 4 input interrupts */
 	unsigned int timeout;
 
 	u8 read_status_mask;
@@ -707,13 +706,13 @@ static u8 mxser_check_modem_status(struct tty_struct *tty,
 
 	/* update input line counters */
 	if (msr & UART_MSR_TERI)
-		port->icount.rng++;
+		uport->icount.rng++;
 	if (msr & UART_MSR_DDSR)
-		port->icount.dsr++;
+		uport->icount.dsr++;
 	if (msr & UART_MSR_DDCD)
-		port->icount.dcd++;
+		uport->icount.dcd++;
 	if (msr & UART_MSR_DCTS)
-		port->icount.cts++;
+		uport->icount.cts++;
 	wake_up_interruptible(&port->port.delta_msr_wait);
 
 	if (tty_port_check_carrier(&port->port) && (msr & UART_MSR_DDCD)) {
@@ -1171,15 +1170,15 @@ static int mxser_tiocmset(struct tty_struct *tty,
 }
 
 static int mxser_cflags_changed(struct mxser_port *info, unsigned long arg,
-		struct async_icount *cprev)
+		struct uart_icount *cprev)
 {
 	struct uart_port *uport = &info->uport;
-	struct async_icount cnow;
+	struct uart_icount cnow;
 	unsigned long flags;
 	int ret;
 
 	spin_lock_irqsave(&uport->lock, flags);
-	cnow = info->icount;	/* atomic copy */
+	cnow = uport->icount;	/* atomic copy */
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	ret =	((arg & TIOCM_RNG) && (cnow.rng != cprev->rng)) ||
@@ -1233,7 +1232,7 @@ static int mxser_ioctl(struct tty_struct *tty,
 {
 	struct mxser_port *info = tty->driver_data;
 	struct uart_port *uport = &info->uport;
-	struct async_icount cnow;
+	struct uart_icount cnow;
 	unsigned long flags;
 	void __user *argp = (void __user *)arg;
 
@@ -1255,7 +1254,7 @@ static int mxser_ioctl(struct tty_struct *tty,
 		 */
 	case TIOCMIWAIT:
 		spin_lock_irqsave(&uport->lock, flags);
-		cnow = info->icount;	/* note the counters on entry */
+		cnow = uport->icount;	/* note the counters on entry */
 		spin_unlock_irqrestore(&uport->lock, flags);
 
 		return wait_event_interruptible(info->port.delta_msr_wait,
@@ -1279,11 +1278,11 @@ static int mxser_get_icount(struct tty_struct *tty,
 {
 	struct mxser_port *info = tty->driver_data;
 	struct uart_port *uport = &info->uport;
-	struct async_icount cnow;
+	struct uart_icount cnow;
 	unsigned long flags;
 
 	spin_lock_irqsave(&uport->lock, flags);
-	cnow = info->icount;
+	cnow = uport->icount;
 	spin_unlock_irqrestore(&uport->lock, flags);
 
 	icount->frame = cnow.frame;
@@ -1535,7 +1534,7 @@ static bool mxser_receive_chars_new(struct mxser_port *port, u8 status)
 	while (gdl--) {
 		u8 ch = inb(uport->iobase + UART_RX);
 		if (!tty_insert_flip_char(&port->port, ch, 0))
-			port->icount.buf_overrun++;
+			uport->icount.buf_overrun++;
 	}
 
 	return true;
@@ -1567,23 +1566,23 @@ static u8 mxser_receive_chars_old(struct tty_struct *tty,
 			if (status & UART_LSR_BRK_ERROR_BITS) {
 				if (status & UART_LSR_BI) {
 					flag = TTY_BREAK;
-					port->icount.brk++;
+					uport->icount.brk++;
 
 					if (port->port.flags & ASYNC_SAK)
 						do_SAK(tty);
 				} else if (status & UART_LSR_PE) {
 					flag = TTY_PARITY;
-					port->icount.parity++;
+					uport->icount.parity++;
 				} else if (status & UART_LSR_FE) {
 					flag = TTY_FRAME;
-					port->icount.frame++;
+					uport->icount.frame++;
 				} else if (status & UART_LSR_OE) {
 					flag = TTY_OVERRUN;
-					port->icount.overrun++;
+					uport->icount.overrun++;
 				}
 			}
 			if (!tty_insert_flip_char(&port->port, ch, flag)) {
-				port->icount.buf_overrun++;
+				uport->icount.buf_overrun++;
 				break;
 			}
 		}
@@ -1616,7 +1615,7 @@ static void mxser_transmit_chars(struct tty_struct *tty, struct mxser_port *port
 	if (uport->x_char) {
 		outb(uport->x_char, uport->iobase + UART_TX);
 		uport->x_char = 0;
-		port->icount.tx++;
+		uport->icount.tx++;
 		return;
 	}
 
@@ -1634,7 +1633,7 @@ static void mxser_transmit_chars(struct tty_struct *tty, struct mxser_port *port
 			break;
 
 		outb(c, uport->iobase + UART_TX);
-		port->icount.tx++;
+		uport->icount.tx++;
 	} while (--count > 0);
 
 	if (kfifo_len(&port->port.xmit_fifo) < WAKEUP_CHARS)
