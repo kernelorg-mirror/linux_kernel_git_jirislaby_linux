@@ -260,7 +260,6 @@ struct mxser_port {
 
 	u8 rx_high_water;
 	u8 rx_low_water;
-	int type;		/* UART type */
 
 	u8 x_char;		/* xon/xoff character */
 	u8 IER;			/* Interrupt Enable Register */
@@ -416,14 +415,17 @@ static enum mxser_must_hwid mxser_must_get_hwid(unsigned long io)
 
 static bool mxser_16550A_or_MUST(struct mxser_port *info)
 {
-	return info->type == PORT_16550A || info->board->must_hwid;
+	struct uart_port *uport = &info->uport;
+
+	return uport->type == PORT_16550A || info->board->must_hwid;
 }
 
 static void mxser_process_txrx_fifo(struct mxser_port *info)
 {
+	struct uart_port *uport = &info->uport;
 	unsigned int i;
 
-	if (info->type == PORT_16450 || info->type == PORT_8250) {
+	if (uport->type == PORT_16450 || uport->type == PORT_8250) {
 		info->rx_high_water = 1;
 		info->rx_low_water = 1;
 		info->xmit_fifo_size = 1;
@@ -615,7 +617,7 @@ static void mxser_change_speed(struct tty_struct *tty, struct ktermios *termios,
 		info->FCR |= UART_FCR_ENABLE_FIFO |
 			MOXA_MUST_FCR_GDA_MODE_ENABLE;
 		mxser_set_must_fifo_value(info);
-	} else if (info->type != PORT_8250 && info->type != PORT_16450) {
+	} else if (uport->type != PORT_8250 && uport->type != PORT_16450) {
 		info->FCR |= UART_FCR_ENABLE_FIFO;
 		switch (info->rx_high_water) {
 		case 1:
@@ -750,7 +752,7 @@ static int mxser_activate(struct tty_port *port, struct tty_struct *tty)
 
 	spin_lock_irqsave(&uport->lock, flags);
 
-	if (!info->type) {
+	if (!uport->type) {
 		set_bit(TTY_IO_ERROR, &tty->flags);
 		spin_unlock_irqrestore(&uport->lock, flags);
 		ret = 0;
@@ -1000,7 +1002,7 @@ static int mxser_get_serial_info(struct tty_struct *tty,
 	if (closing_wait != ASYNC_CLOSING_WAIT_NONE)
 		closing_wait = jiffies_to_msecs(closing_wait) / 10;
 
-	ss->type = info->type;
+	ss->type = uport->type;
 	ss->line = tty->index;
 	ss->port = uport->iobase;
 	ss->irq = info->board->irq;
@@ -1073,7 +1075,7 @@ static int mxser_set_serial_info(struct tty_struct *tty,
 			tty_encode_baud_rate(tty, baud, baud);
 		}
 
-		info->type = ss->type;
+		uport->type = ss->type;
 
 		mxser_process_txrx_fifo(info);
 	}
@@ -1434,9 +1436,10 @@ static bool mxser_tx_empty(struct mxser_port *info)
 static void mxser_wait_until_sent(struct tty_struct *tty, int timeout)
 {
 	struct mxser_port *info = tty->driver_data;
+	struct uart_port *uport = &info->uport;
 	unsigned long expire, char_time;
 
-	if (info->type == PORT_UNKNOWN)
+	if (uport->type == PORT_UNKNOWN)
 		return;
 
 	if (info->xmit_fifo_size == 0)
@@ -1828,7 +1831,7 @@ static void mxser_initbrd(struct pci_dev *pdev, struct mxser_board *brd,
 		if (brd->must_hwid != MOXA_OTHER_UART)
 			mxser_must_set_enhance_mode(uport->iobase, true);
 
-		info->type = PORT_16550A;
+		uport->type = PORT_16550A;
 
 		mxser_process_txrx_fifo(info);
 
