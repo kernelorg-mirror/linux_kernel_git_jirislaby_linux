@@ -264,8 +264,6 @@ struct mxser_port {
 	u8 IER;			/* Interrupt Enable Register */
 	u8 MCR;			/* Modem control register */
 	u8 FCR;			/* FIFO control register */
-
-	u8 xmit_fifo_size;
 };
 
 struct mxser_board {
@@ -422,7 +420,7 @@ static void mxser_process_txrx_fifo(struct mxser_port *info)
 	if (uport->type == PORT_16450 || uport->type == PORT_8250) {
 		info->rx_high_water = 1;
 		info->rx_low_water = 1;
-		info->xmit_fifo_size = 1;
+		uport->fifosize = 1;
 		return;
 	}
 
@@ -430,7 +428,7 @@ static void mxser_process_txrx_fifo(struct mxser_port *info)
 		if (info->board->must_hwid == Gpci_uart_info[i].type) {
 			info->rx_low_water = Gpci_uart_info[i].rx_low_water;
 			info->rx_high_water = Gpci_uart_info[i].rx_high_water;
-			info->xmit_fifo_size = Gpci_uart_info[i].fifo_size;
+			uport->fifosize = Gpci_uart_info[i].fifo_size;
 			break;
 		}
 }
@@ -1429,7 +1427,7 @@ static void mxser_wait_until_sent(struct tty_struct *tty, int timeout)
 	if (uport->type == PORT_UNKNOWN)
 		return;
 
-	if (info->xmit_fifo_size == 0)
+	if (uport->fifosize == 0)
 		return;		/* Just in case.... */
 
 	/*
@@ -1612,7 +1610,7 @@ static void mxser_transmit_chars(struct tty_struct *tty, struct mxser_port *port
 		return;
 	}
 
-	count = port->xmit_fifo_size;
+	count = uport->fifosize;
 	do {
 		u8 c;
 
