@@ -265,8 +265,6 @@ struct mxser_port {
 	u8 MCR;			/* Modem control register */
 	u8 FCR;			/* FIFO control register */
 
-	unsigned int timeout;
-
 	u8 read_status_mask;
 	u8 ignore_status_mask;
 	u8 xmit_fifo_size;
@@ -495,7 +493,6 @@ static int mxser_set_baud(struct mxser_port *info, struct ktermios *termios)
 	unsigned int quot = 0, baud;
 	unsigned char cval;
 	speed_t newspd = tty_termios_baud_rate(termios);
-	u64 timeout;
 
 	if (newspd > info->board->max_baud)
 		return -1;
@@ -513,13 +510,7 @@ static int mxser_set_baud(struct mxser_port *info, struct ktermios *termios)
 		quot = 0;
 	}
 
-	/*
-	 * worst case (128 * 1000 * 10 * 18432) needs 35 bits, so divide in the
-	 * u64 domain
-	 */
-	timeout = (u64)info->xmit_fifo_size * HZ * 10 * quot;
-	do_div(timeout, MXSER_BAUD_BASE);
-	info->timeout = timeout + HZ / 50; /* Add .02 seconds of slop */
+	uart_update_timeout(uport, termios->c_cflag, MXSER_BAUD_BASE);
 
 	if (quot) {
 		info->MCR |= UART_MCR_DTR;
@@ -1435,7 +1426,7 @@ static void mxser_wait_until_sent(struct tty_struct *tty, int timeout)
 {
 	struct mxser_port *info = tty->driver_data;
 	struct uart_port *uport = &info->uport;
-	unsigned long expire, char_time;
+	unsigned long expire, char_time, fifo_timeout;
 
 	if (uport->type == PORT_UNKNOWN)
 		return;
@@ -1451,10 +1442,7 @@ static void mxser_wait_until_sent(struct tty_struct *tty, int timeout)
 	 * Note: we have to use pretty tight timings here to satisfy
 	 * the NIST-PCTS.
 	 */
-	char_time = (info->timeout - HZ / 50) / info->xmit_fifo_size;
-	char_time = char_time / 5;
-	if (char_time == 0)
-		char_time = 1;
+	char_time = max(nsecs_to_jiffies(uport->frame_time / 5), 1UL);
 	if (timeout && timeout < char_time)
 		char_time = timeout;
 
@@ -1465,12 +1453,13 @@ static void mxser_wait_until_sent(struct tty_struct *tty, int timeout)
 	 * amount of time to send the entire FIFO, it probably won't
 	 * ever clear.  This assumes the UART isn't doing flow
 	 * control, which is currently the case.  Hence, if it ever
-	 * takes longer than info->timeout, this is probably due to a
+	 * takes longer than uport->timeout, this is probably due to a
 	 * UART bug of some kind.  So, we clamp the timeout parameter at
-	 * 2*info->timeout.
+	 * 2*uport->timeout.
 	 */
-	if (!timeout || timeout > 2 * info->timeout)
-		timeout = 2 * info->timeout;
+	fifo_timeout = uart_fifo_timeout(uport);
+	if (!timeout || timeout > 2 * fifo_timeout)
+		timeout = 2 * fifo_timeout;
 
 	expire = jiffies + timeout;
 
