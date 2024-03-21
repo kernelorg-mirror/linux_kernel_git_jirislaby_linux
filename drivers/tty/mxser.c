@@ -1735,13 +1735,19 @@ static unsigned short mxser_get_nports(struct pci_dev *pdev)
 	return FIELD_GET(0x00F0, pdev->device);
 }
 
-static void mxser_initbrd(struct mxser_board *brd, bool high_baud)
+static void mxser_initbrd(struct pci_dev *pdev, struct mxser_board *brd,
+			  bool high_baud)
 {
+	unsigned long ioaddress = pci_resource_start(pdev, 2);
 	struct mxser_port *info;
 	unsigned int i;
 	bool is_mu860;
 
-	brd->must_hwid = mxser_must_get_hwid(brd->ports[0].ioaddr);
+	brd->nports = mxser_get_nports(pdev);
+	brd->vector = pci_resource_start(pdev, 3);
+	brd->irq = pdev->irq;
+
+	brd->must_hwid = mxser_must_get_hwid(ioaddress);
 	is_mu860 = brd->must_hwid == MOXA_MUST_MU860_HWID;
 
 	for (i = 0; i < UART_INFO_NUM; i++) {
@@ -1772,6 +1778,7 @@ static void mxser_initbrd(struct mxser_board *brd, bool high_baud)
 		tty_port_init(&info->port);
 		info->port.ops = &mxser_port_ops;
 		info->board = brd;
+		info->ioaddr = ioaddress + 8 * i;
 
 		/* Enhance mode enabled here */
 		if (brd->must_hwid != MOXA_OTHER_UART)
@@ -1794,7 +1801,6 @@ static int mxser_probe(struct pci_dev *pdev,
 {
 	struct mxser_board *brd;
 	unsigned int i, base;
-	unsigned long ioaddress;
 	unsigned short nports = mxser_get_nports(pdev);
 	struct device *tty_dev;
 	int retval = -EINVAL;
@@ -1822,26 +1828,16 @@ static int mxser_probe(struct pci_dev *pdev,
 	}
 
 	/* io address */
-	ioaddress = pci_resource_start(pdev, 2);
 	retval = pci_request_region(pdev, 2, "mxser(IO)");
 	if (retval)
 		goto err_zero;
 
-	brd->nports = nports;
-	for (i = 0; i < nports; i++)
-		brd->ports[i].ioaddr = ioaddress + 8 * i;
-
 	/* vector */
-	ioaddress = pci_resource_start(pdev, 3);
 	retval = pci_request_region(pdev, 3, "mxser(vector)");
 	if (retval)
 		goto err_zero;
-	brd->vector = ioaddress;
 
-	/* irq */
-	brd->irq = pdev->irq;
-
-	mxser_initbrd(brd, ent->driver_data & MXSER_HIGHBAUD);
+	mxser_initbrd(pdev, brd, ent->driver_data & MXSER_HIGHBAUD);
 
 	retval = devm_request_irq(&pdev->dev, brd->irq, mxser_interrupt,
 			IRQF_SHARED, "mxser", brd);
