@@ -15,6 +15,7 @@
  *	- Fixed x86_64 cleanness
  */
 
+#include <linux/bitfield.h>
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/signal.h>
@@ -186,7 +187,6 @@
 #define PCI_DEVICE_ID_MOXA_CP168U	0x1681
 #define PCI_DEVICE_ID_MOXA_CP168EL	0x1682
 
-#define MXSER_NPORTS(ddata)		((ddata) & 0xffU)
 #define MXSER_HIGHBAUD			0x0100
 
 enum mxser_must_hwid {
@@ -209,32 +209,32 @@ static const struct {
 #define UART_INFO_NUM	ARRAY_SIZE(Gpci_uart_info)
 
 static const struct pci_device_id mxser_pcibrds[] = {
-	{ PCI_DEVICE_DATA(MOXA, C168,		8) },
-	{ PCI_DEVICE_DATA(MOXA, C104,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CP132,		2) },
-	{ PCI_DEVICE_DATA(MOXA, CP114,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CT114,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CP102,		2 | MXSER_HIGHBAUD) },
-	{ PCI_DEVICE_DATA(MOXA, CP104U,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CP168U,		8) },
-	{ PCI_DEVICE_DATA(MOXA, CP132U,		2) },
-	{ PCI_DEVICE_DATA(MOXA, CP134U,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CP104JU,	4) },
-	{ PCI_DEVICE_DATA(MOXA, RC7000,		8) }, /* RC7000 */
-	{ PCI_DEVICE_DATA(MOXA, CP118U,		8) },
-	{ PCI_DEVICE_DATA(MOXA, CP102UL,	2) },
-	{ PCI_DEVICE_DATA(MOXA, CP102U,		2) },
-	{ PCI_DEVICE_DATA(MOXA, CP118EL,	8) },
-	{ PCI_DEVICE_DATA(MOXA, CP168EL,	8) },
-	{ PCI_DEVICE_DATA(MOXA, CP104EL,	4) },
-	{ PCI_DEVICE_DATA(MOXA, CB108,		8) },
-	{ PCI_DEVICE_DATA(MOXA, CB114,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CB134I,		4) },
-	{ PCI_DEVICE_DATA(MOXA, CP138U,		8) },
-	{ PCI_DEVICE_DATA(MOXA, POS104UL,	4) },
-	{ PCI_DEVICE_DATA(MOXA, CP114UL,	4) },
-	{ PCI_DEVICE_DATA(MOXA, CP102UF,	2) },
-	{ PCI_DEVICE_DATA(MOXA, CP112UL,	2) },
+	{ PCI_DEVICE_DATA(MOXA, C168, 0) },
+	{ PCI_DEVICE_DATA(MOXA, C104, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP132, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP114, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CT114, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP102, MXSER_HIGHBAUD) },
+	{ PCI_DEVICE_DATA(MOXA, CP104U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP168U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP132U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP134U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP104JU, 0) },
+	{ PCI_DEVICE_DATA(MOXA, RC7000, 0) }, /* RC7000 */
+	{ PCI_DEVICE_DATA(MOXA, CP118U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP102UL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP102U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP118EL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP168EL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP104EL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CB108, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CB114, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CB134I, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP138U, 0) },
+	{ PCI_DEVICE_DATA(MOXA, POS104UL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP114UL, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP102UF, 0) },
+	{ PCI_DEVICE_DATA(MOXA, CP112UL, 0) },
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, mxser_pcibrds);
@@ -1727,6 +1727,14 @@ static const struct tty_port_operations mxser_port_ops = {
  * The MOXA Smartio/Industio serial driver boot-time initialization code!
  */
 
+static unsigned short mxser_get_nports(struct pci_dev *pdev)
+{
+	if (pdev->device == PCI_DEVICE_ID_MOXA_RC7000)
+		return 8;
+
+	return FIELD_GET(0x00F0, pdev->device);
+}
+
 static void mxser_initbrd(struct mxser_board *brd, bool high_baud)
 {
 	struct mxser_port *info;
@@ -1787,7 +1795,7 @@ static int mxser_probe(struct pci_dev *pdev,
 	struct mxser_board *brd;
 	unsigned int i, base;
 	unsigned long ioaddress;
-	unsigned short nports = MXSER_NPORTS(ent->driver_data);
+	unsigned short nports = mxser_get_nports(pdev);
 	struct device *tty_dev;
 	int retval = -EINVAL;
 
