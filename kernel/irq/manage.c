@@ -230,6 +230,7 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	struct irq_chip *chip = irq_data_get_irq_chip(data);
 	const struct cpumask  *prog_mask;
 	int ret;
+	bool on_isolated = false;
 
 	if (!chip || !chip->irq_set_affinity)
 		return -EINVAL;
@@ -260,10 +261,12 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 		hk_mask = housekeeping_cpumask(HK_TYPE_MANAGED_IRQ);
 
 		cpumask_and(tmp_mask, mask, hk_mask);
-		if (!cpumask_intersects(tmp_mask, cpu_online_mask))
+		if (!cpumask_intersects(tmp_mask, cpu_online_mask)) {
+			on_isolated = true;
 			prog_mask = mask;
-		else
+		} else {
 			prog_mask = tmp_mask;
+		}
 	} else {
 		prog_mask = mask;
 	}
@@ -274,12 +277,18 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	 * case we do as we are told).
 	 */
 	cpumask_and(tmp_mask, prog_mask, cpu_online_mask);
-	if (!force && !cpumask_empty(tmp_mask))
+	if (!force && !cpumask_empty(tmp_mask)) {
+		if (on_isolated) {
+			pr_warn("%s: IRQ %u is affine to isolated CPUs: %*pbl\n",
+				__func__, data->irq,
+				cpumask_pr_args(tmp_mask));
+		}
 		ret = chip->irq_set_affinity(data, tmp_mask, force);
-	else if (force)
+	} else if (force) {
 		ret = chip->irq_set_affinity(data, mask, force);
-	else
+	} else {
 		ret = -EINVAL;
+	}
 
 	switch (ret) {
 	case IRQ_SET_MASK_OK:
