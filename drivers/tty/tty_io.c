@@ -3158,18 +3158,25 @@ EXPORT_SYMBOL_GPL(tty_put_char);
 static int tty_cdev_add(struct tty_driver *driver, dev_t dev,
 		unsigned int index, unsigned int count)
 {
+	struct cdev *cdev;
 	int err;
 
 	/* init here, since reused cdevs cause crashes */
-	driver->cdevs[index] = cdev_alloc();
-	if (!driver->cdevs[index])
+	cdev = cdev_alloc();
+	if (!cdev)
 		return -ENOMEM;
-	driver->cdevs[index]->ops = &tty_fops;
-	driver->cdevs[index]->owner = driver->owner;
-	err = cdev_add(driver->cdevs[index], dev, count);
-	if (err)
-		kobject_put(&driver->cdevs[index]->kobj);
-	return err;
+
+	cdev->ops = &tty_fops;
+	cdev->owner = driver->owner;
+	driver->cdevs[index] = cdev;
+
+	err = cdev_add(cdev, dev, count);
+	if (err) {
+		kobject_put(&cdev->kobj);
+		return err;
+	}
+
+	return 0;
 }
 
 /**
