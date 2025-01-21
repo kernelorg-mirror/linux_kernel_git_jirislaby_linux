@@ -3181,15 +3181,20 @@ static int tty_cdev_add(struct tty_driver *driver, dev_t dev,
 
 	cdev->ops = &tty_fops;
 	cdev->owner = driver->owner;
-	driver->cdevs[index] = cdev;
+	err = xa_err(xa_store(&driver->cdevs, index, cdev, GFP_KERNEL));
+	if (err)
+		goto err_put;
 
 	err = cdev_add(cdev, dev, count);
-	if (err) {
-		kobject_put(&cdev->kobj);
-		return err;
-	}
+	if (err)
+		goto err_erase;
 
 	return 0;
+err_erase:
+	xa_erase(&driver->cdevs, index);
+err_put:
+	kobject_put(&cdev->kobj);
+	return err;
 }
 
 /**
@@ -3320,10 +3325,8 @@ EXPORT_SYMBOL_GPL(tty_register_device_attr);
 void tty_unregister_device(struct tty_driver *driver, unsigned index)
 {
 	device_destroy(&tty_class, MKDEV(driver->major, driver->minor_start) + index);
-	if (!(driver->flags & TTY_DRIVER_DYNAMIC_ALLOC)) {
-		cdev_del(driver->cdevs[index]);
-		driver->cdevs[index] = NULL;
-	}
+	if (!(driver->flags & TTY_DRIVER_DYNAMIC_ALLOC))
+		cdev_del(xa_erase(&driver->cdevs, index));
 }
 EXPORT_SYMBOL(tty_unregister_device);
 
@@ -3342,8 +3345,6 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 		unsigned long flags)
 {
 	struct tty_driver *driver;
-	unsigned int cdevs = 1;
-	int err;
 
 	if (!lines || (flags & TTY_DRIVER_UNNUMBERED_NODE && lines > 1))
 		return ERR_PTR(-EINVAL);
@@ -3356,25 +3357,12 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 	xa_init(&driver->ttys);
 	xa_init(&driver->termios);
 	xa_init(&driver->ports);
+	xa_init(&driver->cdevs);
 	driver->num = lines;
 	driver->owner = owner;
 	driver->flags = flags;
 
-	if (!(flags & TTY_DRIVER_DYNAMIC_ALLOC)) {
-		cdevs = lines;
-	}
-
-	driver->cdevs = kcalloc(cdevs, sizeof(*driver->cdevs), GFP_KERNEL);
-	if (!driver->cdevs) {
-		err = -ENOMEM;
-		goto err_free_all;
-	}
-
 	return driver;
-err_free_all:
-	kfree(driver->cdevs);
-	kfree(driver);
-	return ERR_PTR(err);
 }
 EXPORT_SYMBOL(__tty_alloc_driver);
 
@@ -3391,12 +3379,12 @@ static void destruct_tty_driver(struct kref *kref)
 		}
 		proc_tty_unregister_driver(driver);
 		if (driver->flags & TTY_DRIVER_DYNAMIC_ALLOC)
-			cdev_del(driver->cdevs[0]);
+			cdev_del(xa_load(&driver->cdevs, 0));
 	}
-	kfree(driver->cdevs);
 	xa_destroy(&driver->ttys);
 	xa_destroy(&driver->termios);
 	xa_destroy(&driver->ports);
+	xa_destroy(&driver->cdevs);
 	kfree(driver);
 }
 

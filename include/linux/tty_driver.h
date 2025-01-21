@@ -526,7 +526,6 @@ struct tty_operations {
  */
 struct tty_driver {
 	struct kref kref;
-	struct cdev **cdevs;
 	struct module	*owner;
 	const char	*driver_name;
 	const char	*name;
@@ -547,6 +546,8 @@ struct tty_driver {
 	struct xarray ttys;
 	struct xarray termios;
 	struct xarray ports;
+	struct xarray cdevs;
+
 	void *driver_state;
 
 	/*
