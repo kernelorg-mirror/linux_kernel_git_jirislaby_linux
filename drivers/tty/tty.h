@@ -89,8 +89,7 @@ long tty_jobctrl_ioctl(struct tty_struct *tty, struct tty_struct *real_tty,
 void tty_default_fops(struct file_operations *fops);
 struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx);
 void free_tty_struct(struct tty_struct *tty);
-int tty_alloc_file(struct file *file);
-void tty_add_file(struct tty_struct *tty, struct file *file);
+int tty_add_file(struct tty_struct *tty, struct file *file);
 void tty_free_file(struct file *file);
 int tty_release(struct inode *inode, struct file *filp);
 

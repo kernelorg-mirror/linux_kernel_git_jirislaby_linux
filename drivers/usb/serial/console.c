@@ -132,6 +132,8 @@ static int usb_console_setup(struct console *co, char *options)
 			 * allocate a fake tty so the driver can initialize
 			 * the termios structure, then later call set_termios to
 			 * configure according to command line arguments
+			 *
+			 * js: all this is terrible and shall cease to exist
 			 */
 			tty = kzalloc(sizeof(*tty), GFP_KERNEL);
 			if (!tty) {
@@ -143,7 +145,7 @@ static int usb_console_setup(struct console *co, char *options)
 			tty->index = co->index;
 			init_ldsem(&tty->ldisc_sem);
 			spin_lock_init(&tty->files_lock);
-			INIT_LIST_HEAD(&tty->tty_files);
+			xa_init_flags(&tty->tty_files, XA_FLAGS_ALLOC);
 			kref_get(&tty->driver->kref);
 			__module_get(tty->driver->owner);
 			tty->ops = &usb_console_fake_tty_ops;

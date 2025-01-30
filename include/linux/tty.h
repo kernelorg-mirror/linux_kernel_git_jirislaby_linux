@@ -237,17 +237,10 @@ struct tty_struct {
 	int write_cnt;
 	u8 *write_buf;
 
-	struct list_head tty_files;
+	struct xarray tty_files;
 
 	struct work_struct SAK_work;
 } __randomize_layout;
-
-/* Each of a tty's open files has private_data pointing to tty_file_private */
-struct tty_file_private {
-	struct tty_struct *tty;
-	struct file *file;
-	struct list_head list;
-};
 
 /**
  * enum tty_struct_flags - TTY Struct Flags

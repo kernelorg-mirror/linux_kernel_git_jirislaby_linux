@@ -637,6 +637,8 @@ done:
 static void revalidate_tty(const struct cred *subj_cred, struct aa_label *label)
 {
 	struct tty_struct *tty;
+	struct file *file;
+	unsigned long idx;
 	int drop_tty = 0;
 
 	tty = get_current_tty();
@@ -644,17 +646,12 @@ static void revalidate_tty(const struct cred *subj_cred, struct aa_label *label)
 		return;
 
 	spin_lock(&tty->files_lock);
-	if (!list_empty(&tty->tty_files)) {
-		struct tty_file_private *file_priv;
-		struct file *file;
+	xa_for_each(&tty->tty_files, idx, file) {
 		/* TODO: Revalidate access to controlling tty. */
-		file_priv = list_first_entry(&tty->tty_files,
-					     struct tty_file_private, list);
-		file = file_priv->file;
-
 		if (aa_file_perm(OP_INHERIT, subj_cred, label, file,
 				 MAY_READ | MAY_WRITE, IN_ATOMIC))
 			drop_tty = 1;
+		break;
 	}
 	spin_unlock(&tty->files_lock);
 	tty_kref_put(tty);

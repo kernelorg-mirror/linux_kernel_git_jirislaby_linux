@@ -176,60 +176,41 @@ void free_tty_struct(struct tty_struct *tty)
 
 static inline struct tty_struct *file_tty(struct file *file)
 {
-	return ((struct tty_file_private *)file->private_data)->tty;
-}
-
-int tty_alloc_file(struct file *file)
-{
-	struct tty_file_private *priv;
-
-	priv = kmalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	file->private_data = priv;
-
-	return 0;
+	return file->private_data;
 }
 
 /* Associate a new file with the tty structure */
-void tty_add_file(struct tty_struct *tty, struct file *file)
+int tty_add_file(struct tty_struct *tty, struct file *file)
 {
-	struct tty_file_private *priv = file->private_data;
+	u32 id, next = 0;
+	int ret;
 
-	priv->tty = tty;
-	priv->file = file;
+	ret = xa_alloc_cyclic(&tty->tty_files, &id, file, xa_limit_16b, &next,
+			GFP_KERNEL);
+	if (ret < 0)
+		return ret;
 
-	spin_lock(&tty->files_lock);
-	list_add(&priv->list, &tty->tty_files);
-	spin_unlock(&tty->files_lock);
-}
+	file->private_data = tty;
 
-/**
- * tty_free_file - free file->private_data
- * @file: to free private_data of
- *
- * This shall be used only for fail path handling when tty_add_file was not
- * called yet.
- */
-void tty_free_file(struct file *file)
-{
-	struct tty_file_private *priv = file->private_data;
-
-	file->private_data = NULL;
-	kfree(priv);
+	return 0;
 }
 
 /* Delete file from its tty */
 static void tty_del_file(struct file *file)
 {
-	struct tty_file_private *priv = file->private_data;
-	struct tty_struct *tty = priv->tty;
+	struct tty_struct *tty = file->private_data;
+	struct file *entry;
+	unsigned long idx;
 
 	spin_lock(&tty->files_lock);
-	list_del(&priv->list);
+	xa_for_each(&tty->tty_files, idx, entry)
+		if (entry == file) {
+			xa_erase(&tty->tty_files, idx);
+			break;
+		}
 	spin_unlock(&tty->files_lock);
-	tty_free_file(file);
+
+	file->private_data = NULL;
 }
 
 /**
@@ -273,11 +254,13 @@ static int tty_paranoia_check(struct tty_struct *tty, struct inode *inode,
 static void check_tty_count(struct tty_struct *tty, const char *routine)
 {
 #ifdef CHECK_TTY_COUNT
-	struct list_head *p;
+	struct file *file;
+	unsigned long idx;
+
 	int count = 0, kopen_count = 0;
 
 	scoped_guard(spinlock, &tty->files_lock)
-		list_for_each(p, &tty->tty_files)
+		xa_for_each(&tty->tty_files, idx, file)
 			count++;
 
 	if (tty->driver->type == TTY_DRIVER_TYPE_PTY &&
@@ -569,7 +552,7 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 {
 	struct file *cons_filp = NULL;
 	struct file *filp, *f;
-	struct tty_file_private *priv;
+	unsigned long idx;
 	int    closecount = 0, n;
 	int refs;
 
@@ -601,8 +584,8 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 
 	spin_lock(&tty->files_lock);
 	/* This breaks for file handles being sent over AF_UNIX sockets ? */
-	list_for_each_entry(priv, &tty->tty_files, list) {
-		filp = priv->file;
+
+	xa_for_each(&tty->tty_files, idx, filp) {
 		if (filp->f_op->write_iter == redirected_tty_write)
 			cons_filp = filp;
 		if (filp->f_op->write_iter != tty_write)
@@ -798,12 +781,13 @@ EXPORT_SYMBOL(start_tty);
 static void tty_update_time(struct tty_struct *tty, bool mtime)
 {
 	time64_t sec = ktime_get_real_seconds();
-	struct tty_file_private *priv;
+	struct file *file;
+	unsigned long idx;
 
 	guard(spinlock)(&tty->files_lock);
 
-	list_for_each_entry(priv, &tty->tty_files, list) {
-		struct inode *inode = file_inode(priv->file);
+	xa_for_each(&tty->tty_files, idx, file) {
+		struct inode *inode = file_inode(file);
 		struct timespec64 time = mtime ? inode_get_mtime(inode) : inode_get_atime(inode);
 
 		/*
@@ -1536,7 +1520,7 @@ static void release_one_tty(struct work_struct *work)
 	module_put(owner);
 
 	spin_lock(&tty->files_lock);
-	list_del_init(&tty->tty_files);
+	xa_destroy(&tty->tty_files);
 	spin_unlock(&tty->files_lock);
 
 	put_pid(tty->ctrl.pgrp);
@@ -2124,16 +2108,11 @@ static int tty_open(struct inode *inode, struct file *filp)
 	nonseekable_open(inode, filp);
 
 retry_open:
-	retval = tty_alloc_file(filp);
-	if (retval)
-		return -ENOMEM;
-
 	tty = tty_open_current_tty(device, filp);
 	if (!tty)
 		tty = tty_open_by_driver(device, filp);
 
 	if (IS_ERR(tty)) {
-		tty_free_file(filp);
 		retval = PTR_ERR(tty);
 		if (retval != -EAGAIN || signal_pending(current))
 			return retval;
@@ -2141,7 +2120,9 @@ retry_open:
 		goto retry_open;
 	}
 
-	tty_add_file(tty, filp);
+	retval = tty_add_file(tty, filp);
+	if (retval < 0)
+		goto err;
 
 	check_tty_count(tty, __func__);
 	tty_debug_hangup(tty, "opening (count=%d)\n", tty->count);
@@ -2153,6 +2134,7 @@ retry_open:
 	filp->f_flags = saved_flags;
 
 	if (retval) {
+err:
 		tty_debug_hangup(tty, "open error %d, releasing\n", retval);
 
 		tty_unlock(tty); /* need to call tty_release without BTM */
@@ -3135,7 +3117,7 @@ struct tty_struct *alloc_tty_struct(struct tty_driver *driver, int idx)
 	spin_lock_init(&tty->ctrl.lock);
 	spin_lock_init(&tty->flow.lock);
 	spin_lock_init(&tty->files_lock);
-	INIT_LIST_HEAD(&tty->tty_files);
+	xa_init_flags(&tty->tty_files, XA_FLAGS_ALLOC);
 	INIT_WORK(&tty->SAK_work, do_SAK_work);
 
 	tty->driver = driver;

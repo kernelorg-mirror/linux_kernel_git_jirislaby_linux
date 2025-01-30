@@ -808,15 +808,9 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 	/* We refuse fsnotify events on ptmx, since it's a shared resource */
 	file_set_fsnotify_mode(filp, FMODE_NONOTIFY);
 
-	retval = tty_alloc_file(filp);
-	if (retval)
-		return retval;
-
 	fsi = devpts_acquire(filp);
-	if (IS_ERR(fsi)) {
-		retval = PTR_ERR(fsi);
-		goto out_free_file;
-	}
+	if (IS_ERR(fsi))
+		return PTR_ERR(fsi);
 
 	/* find a device that is not in use. */
 	mutex_lock(&devpts_mutex);
@@ -845,7 +839,9 @@ static int ptmx_open(struct inode *inode, struct file *filp)
 	set_bit(TTY_PTY_LOCK, &tty->flags); /* LOCK THE SLAVE */
 	tty->driver_data = fsi;
 
-	tty_add_file(tty, filp);
+	retval = tty_add_file(tty, filp);
+	if (retval < 0)
+		goto err_release;
 
 	dentry = devpts_pty_new(fsi, index, tty->link);
 	if (IS_ERR(dentry)) {
@@ -871,8 +867,6 @@ out:
 	devpts_kill_index(fsi, index);
 out_put_fsi:
 	devpts_release(fsi);
-out_free_file:
-	tty_free_file(filp);
 	return retval;
 }
 
