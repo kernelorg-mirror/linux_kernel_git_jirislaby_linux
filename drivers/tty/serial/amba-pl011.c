@@ -2842,13 +2842,14 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 
 static int pl011_register_port(struct uart_amba_port *uap)
 {
+	static bool registered;
 	int ret, i;
 
 	/* Ensure interrupts from this UART are masked and cleared */
 	pl011_write(0, uap, REG_IMSC);
 	pl011_write(0xffff, uap, REG_ICR);
 
-	if (!amba_reg.state) {
+	if (!registered) {
 		ret = uart_register_driver(&amba_reg);
 		if (ret < 0) {
 			dev_err(uap->port.dev,
@@ -2858,6 +2859,7 @@ static int pl011_register_port(struct uart_amba_port *uap)
 					amba_ports[i] = NULL;
 			return ret;
 		}
+		registered = true;
 	}
 
 	ret = uart_add_one_port(&amba_reg, &uap->port);

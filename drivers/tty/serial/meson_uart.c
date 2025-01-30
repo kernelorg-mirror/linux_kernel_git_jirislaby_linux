@@ -694,6 +694,7 @@ static struct uart_driver *meson_uart_current(const struct meson_uart_data *pd)
 
 static int meson_uart_probe(struct platform_device *pdev)
 {
+	static bool uart_registered;
 	const struct meson_uart_data *priv_data;
 	struct uart_driver *uart_driver;
 	struct resource *res_mem;
@@ -748,11 +749,12 @@ static int meson_uart_probe(struct platform_device *pdev)
 
 	uart_driver = meson_uart_current(priv_data);
 
-	if (!uart_driver->state) {
+	if (!uart_registered) {
 		ret = uart_register_driver(uart_driver);
 		if (ret)
 			return dev_err_probe(&pdev->dev, ret,
 					     "can't register uart driver\n");
+		uart_registered = true;
 	}
 
 	port->iotype = UPIO_MEM;

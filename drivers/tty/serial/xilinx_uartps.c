@@ -1645,6 +1645,7 @@ static int cdns_rs485_config(struct uart_port *port, struct ktermios *termios,
  */
 static int cdns_uart_probe(struct platform_device *pdev)
 {
+	static bool uart_registered;
 	int rc, id, irq;
 	struct uart_port *port;
 	struct resource *res;
@@ -1669,7 +1670,7 @@ static int cdns_uart_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	if (!cdns_uart_uart_driver.state) {
+	if (!uart_registered) {
 		cdns_uart_uart_driver.owner = THIS_MODULE;
 		cdns_uart_uart_driver.driver_name = CDNS_UART_NAME;
 		cdns_uart_uart_driver.dev_name = CDNS_UART_TTY_NAME;
@@ -1685,6 +1686,7 @@ static int cdns_uart_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev, "Failed to register driver\n");
 			return rc;
 		}
+		uart_registered = true;
 	}
 
 	cdns_uart_data->cdns_uart_driver = &cdns_uart_uart_driver;

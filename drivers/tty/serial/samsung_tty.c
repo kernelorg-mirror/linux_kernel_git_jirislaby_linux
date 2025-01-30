@@ -1952,6 +1952,7 @@ s3c24xx_get_driver_data(struct platform_device *pdev)
 
 static int s3c24xx_serial_probe(struct platform_device *pdev)
 {
+	static bool uart_registered;
 	struct device_node *np = pdev->dev.of_node;
 	struct s3c24xx_uart_port *ourport;
 	int index = probe_index;
@@ -2036,12 +2037,13 @@ static int s3c24xx_serial_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	if (!s3c24xx_uart_drv.state) {
+	if (!uart_registered) {
 		ret = uart_register_driver(&s3c24xx_uart_drv);
 		if (ret < 0) {
 			pr_err("Failed to register Samsung UART driver\n");
 			return ret;
 		}
+		uart_registered = true;
 	}
 
 	dev_dbg(&pdev->dev, "%s: adding port\n", __func__);

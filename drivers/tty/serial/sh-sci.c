@@ -3531,6 +3531,8 @@ static struct plat_sci_port *sci_parse_dt(struct platform_device *pdev,
 	return p;
 }
 
+static bool uart_registered;
+
 static int sci_probe_single(struct platform_device *dev,
 				      unsigned int index,
 				      struct plat_sci_port *p,
@@ -3551,12 +3553,13 @@ static int sci_probe_single(struct platform_device *dev,
 		return -EBUSY;
 
 	mutex_lock(&sci_uart_registration_lock);
-	if (!sci_uart_driver.state) {
+	if (!uart_registered) {
 		ret = uart_register_driver(&sci_uart_driver);
 		if (ret) {
 			mutex_unlock(&sci_uart_registration_lock);
 			return ret;
 		}
+		uart_registered = true;
 	}
 	mutex_unlock(&sci_uart_registration_lock);
 
@@ -3764,7 +3767,7 @@ static void __exit sci_exit(void)
 {
 	platform_driver_unregister(&sci_driver);
 
-	if (sci_uart_driver.state)
+	if (uart_registered)
 		uart_unregister_driver(&sci_uart_driver);
 }
 

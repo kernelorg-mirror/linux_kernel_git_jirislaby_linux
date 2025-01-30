@@ -661,6 +661,7 @@ static struct uart_driver amba_reg = {
 
 static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 {
+	static bool registered;
 	struct uart_amba_port *uap;
 	void __iomem *base;
 	int i, ret;
@@ -704,7 +705,7 @@ static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 	amba_set_drvdata(dev, uap);
 
 	mutex_lock(&amba_reg_lock);
-	if (!amba_reg.state) {
+	if (!registered) {
 		ret = uart_register_driver(&amba_reg);
 		if (ret < 0) {
 			mutex_unlock(&amba_reg_lock);
@@ -712,6 +713,7 @@ static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 				"Failed to register AMBA-PL010 driver\n");
 			return ret;
 		}
+		registered = true;
 	}
 	mutex_unlock(&amba_reg_lock);
 
