@@ -898,7 +898,7 @@ struct uart_driver {
 	 * these are private; the low level driver should not
 	 * touch these; they should be initialised to NULL
 	 */
-	struct uart_state	*state;
+	struct xarray		state;
 	struct tty_driver	*tty_driver;
 };
 

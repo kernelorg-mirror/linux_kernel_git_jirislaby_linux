@@ -364,7 +364,8 @@ static void uart_clps711x_console_putchar(struct uart_port *port, unsigned char 
 static void uart_clps711x_console_write(struct console *co, const char *c,
 					unsigned n)
 {
-	struct uart_port *port = clps711x_uart.state[co->index].uart_port;
+	struct uart_state *state = xa_load(&clps711x_uart.state, co->index);
+	struct uart_port *port = state->uart_port;
 	struct clps711x_port *s = dev_get_drvdata(port->dev);
 	u32 sysflg = 0;
 
@@ -381,6 +382,7 @@ static int uart_clps711x_console_setup(struct console *co, char *options)
 	int baud = 38400, bits = 8, parity = 'n', flow = 'n';
 	int ret, index = co->index;
 	struct clps711x_port *s;
+	struct uart_state *state;
 	struct uart_port *port;
 	unsigned int quot;
 	u32 ubrlcr;
@@ -388,7 +390,8 @@ static int uart_clps711x_console_setup(struct console *co, char *options)
 	if (index < 0 || index >= UART_CLPS711X_NR)
 		return -EINVAL;
 
-	port = clps711x_uart.state[index].uart_port;
+	state = xa_load(&clps711x_uart.state, index);
+	port = state->uart_port;
 	if (!port)
 		return -ENODEV;
 

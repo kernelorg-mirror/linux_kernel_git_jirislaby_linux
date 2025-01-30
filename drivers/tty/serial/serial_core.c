@@ -1730,7 +1730,7 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 		struct uart_driver *drv = tty->driver->driver_state;
 		struct tty_port *port;
 
-		state = drv->state + tty->index;
+		state = xa_load(&drv->state, tty->index);
 		port = &state->port;
 		spin_lock_irq(&port->lock);
 		--port->count;
@@ -1932,7 +1932,7 @@ static void uart_dtr_rts(struct tty_port *port, bool active)
 static int uart_install(struct tty_driver *driver, struct tty_struct *tty)
 {
 	struct uart_driver *drv = driver->driver_state;
-	struct uart_state *state = drv->state + tty->index;
+	struct uart_state *state = xa_load(&drv->state, tty->index);
 
 	tty->driver_data = state;
 
@@ -2077,11 +2077,12 @@ static int uart_proc_show(struct seq_file *m, void *v)
 {
 	struct tty_driver *ttydrv = m->private;
 	struct uart_driver *drv = ttydrv->driver_state;
-	int i;
+	struct uart_state *state;
+	unsigned long idx;
 
 	seq_printf(m, "serinfo:1.0 driver%s%s revision:%s\n", "", "", "");
-	for (i = 0; i < drv->nr; i++)
-		uart_line_info(m, drv->state + i);
+	xa_for_each(&drv->state, idx, state)
+		uart_line_info(m, state);
 	return 0;
 }
 #endif
@@ -2342,7 +2343,7 @@ static int serial_match_port(struct device *dev, const void *data)
 
 int uart_suspend_port(struct uart_driver *drv, struct uart_port *uport)
 {
-	struct uart_state *state = drv->state + uport->line;
+	struct uart_state *state = xa_load(&drv->state, uport->line);
 	struct tty_port *port = &state->port;
 	struct device *tty_dev;
 	struct uart_match match = {uport, drv};
@@ -2419,7 +2420,7 @@ EXPORT_SYMBOL(uart_suspend_port);
 
 int uart_resume_port(struct uart_driver *drv, struct uart_port *uport)
 {
-	struct uart_state *state = drv->state + uport->line;
+	struct uart_state *state = xa_load(&drv->state, uport->line);
 	struct tty_port *port = &state->port;
 	struct device *tty_dev;
 	struct uart_match match = {uport, drv};
@@ -2628,7 +2629,7 @@ uart_configure_port(struct uart_driver *drv, struct uart_state *state,
 static int uart_poll_init(struct tty_driver *driver, int line, char *options)
 {
 	struct uart_driver *drv = driver->driver_state;
-	struct uart_state *state = drv->state + line;
+	struct uart_state *state = xa_load(&drv->state, line);
 	enum uart_pm_state pm_state;
 	struct tty_port *tport;
 	struct uart_port *port;
@@ -2675,7 +2676,7 @@ static int uart_poll_init(struct tty_driver *driver, int line, char *options)
 static int uart_poll_get_char(struct tty_driver *driver, int line)
 {
 	struct uart_driver *drv = driver->driver_state;
-	struct uart_state *state = drv->state + line;
+	struct uart_state *state = xa_load(&drv->state, line);
 	struct uart_port *port;
 	int ret = -1;
 
@@ -2691,7 +2692,7 @@ static int uart_poll_get_char(struct tty_driver *driver, int line)
 static void uart_poll_put_char(struct tty_driver *driver, int line, char ch)
 {
 	struct uart_driver *drv = driver->driver_state;
-	struct uart_state *state = drv->state + line;
+	struct uart_state *state = xa_load(&drv->state, line);
 	struct uart_port *port;
 
 	port = uart_port_ref(state);
@@ -2766,23 +2767,15 @@ static const struct tty_port_operations uart_port_ops = {
 int uart_register_driver(struct uart_driver *drv)
 {
 	struct tty_driver *normal;
-	int i, retval = -ENOMEM;
+	int retval;
 
-	BUG_ON(drv->state);
+	xa_init(&drv->state);
 
-	/*
-	 * Maybe we should be using a slab cache for this, especially if
-	 * we have a large number of ports to handle.
-	 */
-	drv->state = kcalloc(drv->nr, sizeof(struct uart_state), GFP_KERNEL);
-	if (!drv->state)
-		goto out;
-
-	normal = tty_alloc_driver(drv->nr, TTY_DRIVER_REAL_RAW |
+	normal = tty_alloc_driver(UINT_MAX, TTY_DRIVER_REAL_RAW |
 			TTY_DRIVER_DYNAMIC_DEV);
 	if (IS_ERR(normal)) {
 		retval = PTR_ERR(normal);
-		goto out_kfree;
+		goto out_free_state;
 	}
 
 	drv->tty_driver = normal;
@@ -2799,27 +2792,13 @@ int uart_register_driver(struct uart_driver *drv)
 	normal->driver_state    = drv;
 	tty_set_operations(normal, &uart_ops);
 
-	/*
-	 * Initialise the UART state(s).
-	 */
-	for (i = 0; i < drv->nr; i++) {
-		struct uart_state *state = drv->state + i;
-		struct tty_port *port = &state->port;
-
-		tty_port_init(port);
-		port->ops = &uart_port_ops;
-	}
-
 	retval = tty_register_driver(normal);
 	if (retval >= 0)
 		return retval;
 
-	for (i = 0; i < drv->nr; i++)
-		tty_port_destroy(&drv->state[i].port);
 	tty_driver_kref_put(normal);
-out_kfree:
-	kfree(drv->state);
-out:
+out_free_state:
+	xa_destroy(&drv->state);
 	return retval;
 }
 EXPORT_SYMBOL(uart_register_driver);
@@ -2837,14 +2816,10 @@ EXPORT_SYMBOL(uart_register_driver);
 void uart_unregister_driver(struct uart_driver *drv)
 {
 	struct tty_driver *p = drv->tty_driver;
-	unsigned int i;
 
 	tty_unregister_driver(p);
 	tty_driver_kref_put(p);
-	for (i = 0; i < drv->nr; i++)
-		tty_port_destroy(&drv->state[i].port);
-	kfree(drv->state);
-	drv->state = NULL;
+	xa_destroy(&drv->state);
 	drv->tty_driver = NULL;
 }
 EXPORT_SYMBOL(uart_unregister_driver);
@@ -3096,18 +3071,21 @@ static int serial_core_add_one_port(struct uart_driver *drv, struct uart_port *u
 	struct uart_state *state;
 	struct tty_port *port;
 	struct device *tty_dev;
-	int num_groups;
+	int num_groups, ret;
 
-	if (uport->line >= drv->nr)
-		return -EINVAL;
+	state = kzalloc(sizeof(*state), GFP_KERNEL);
+	if (!state)
+		return -ENOMEM;
 
-	state = drv->state + uport->line;
+	ret = xa_err(xa_store(&drv->state, uport->line, state, GFP_KERNEL));
+	if (ret)
+		goto err_free_state;
+
 	port = &state->port;
+	tty_port_init(port);
+	port->ops = &uart_port_ops;
 
 	guard(mutex)(&port->mutex);
-	if (state->uart_port)
-		return -EINVAL;
-
 	/* Link the port to the driver state table and vice versa */
 	atomic_set(&state->refcount, 1);
 	init_waitqueue_head(&state->remove_wait);
@@ -3168,6 +3146,9 @@ static int serial_core_add_one_port(struct uart_driver *drv, struct uart_port *u
 	}
 
 	return 0;
+err_free_state:
+	kfree(state);
+	return ret;
 }
 
 /**
@@ -3184,7 +3165,7 @@ static int serial_core_add_one_port(struct uart_driver *drv, struct uart_port *u
 static void serial_core_remove_one_port(struct uart_driver *drv,
 					struct uart_port *uport)
 {
-	struct uart_state *state = drv->state + uport->line;
+	struct uart_state *state = xa_load(&drv->state, uport->line);
 	struct tty_port *port = &state->port;
 	struct uart_port *uart_port;
 	struct tty_struct *tty;
@@ -3237,6 +3218,9 @@ static void serial_core_remove_one_port(struct uart_driver *drv,
 	wait_event(state->remove_wait, !atomic_read(&state->refcount));
 	state->uart_port = NULL;
 	mutex_unlock(&port->mutex);
+
+	tty_port_destroy(port);
+	kfree(state);
 }
 
 /**
@@ -3289,12 +3273,11 @@ static struct serial_ctrl_device *serial_core_ctrl_find(struct uart_driver *drv,
 							int ctrl_id)
 {
 	struct uart_state *state;
-	int i;
+	unsigned long idx;
 
 	lockdep_assert_held(&port_mutex);
 
-	for (i = 0; i < drv->nr; i++) {
-		state = drv->state + i;
+	xa_for_each(&drv->state, idx, state) {
 		if (!state->uart_port || !state->uart_port->port_dev)
 			continue;
 
