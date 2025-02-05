@@ -186,8 +186,8 @@ static int serial8250_em_probe(struct platform_device *pdev)
 	up.port.uartclk = clk_get_rate(sclk);
 
 	up.port.iotype = UPIO_MEM32;
-	up.port.serial_in = serial8250_em_serial_in;
-	up.port.serial_out = serial8250_em_serial_out;
+	up.port.ops2->serial_in = serial8250_em_serial_in;
+	up.port.ops2->serial_out = serial8250_em_serial_out;
 	up.ops->dl_read = serial8250_em_serial_dl_read;
 	up.ops->dl_write = serial8250_em_serial_dl_write;
 

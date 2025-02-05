@@ -2898,9 +2898,9 @@ static int lpuart_probe(struct platform_device *pdev)
 	sport->port.flags = UPF_BOOT_AUTOCONF;
 
 	if (lpuart_is_32(sport))
-		sport->port.rs485_config = lpuart32_config_rs485;
+		sport->port.ops2->rs485_config = lpuart32_config_rs485;
 	else
-		sport->port.rs485_config = lpuart_config_rs485;
+		sport->port.ops2->rs485_config = lpuart_config_rs485;
 	sport->port.rs485_supported = lpuart_rs485_supported;
 
 	sport->ipg_clk = devm_clk_get(&pdev->dev, "ipg");

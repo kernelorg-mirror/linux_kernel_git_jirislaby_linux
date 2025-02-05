@@ -1029,7 +1029,7 @@ static int brcmuart_probe(struct platform_device *pdev)
 	up.port.dev = dev;
 	up.port.mapbase = mapbase;
 	up.port.membase = membase;
-	up.port.handle_irq = brcmuart_handle_irq;
+	up.port.ops2->handle_irq = brcmuart_handle_irq;
 	up.port.flags = UPF_BOOT_AUTOCONF | UPF_FIXED_PORT | UPF_FIXED_TYPE;
 	up.port.private_data = priv;
 
@@ -1058,11 +1058,11 @@ static int brcmuart_probe(struct platform_device *pdev)
 	/* setup HR timer */
 	hrtimer_setup(&priv->hrt, brcmuart_hrtimer_func, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 
-	up.port.shutdown = brcmuart_shutdown;
-	up.port.startup = brcmuart_startup;
-	up.port.throttle = brcmuart_throttle;
-	up.port.unthrottle = brcmuart_unthrottle;
-	up.port.set_termios = brcmstb_set_termios;
+	up.port.ops2->shutdown = brcmuart_shutdown;
+	up.port.ops2->startup = brcmuart_startup;
+	up.port.ops2->throttle = brcmuart_throttle;
+	up.port.ops2->unthrottle = brcmuart_unthrottle;
+	up.port.ops2->set_termios = brcmstb_set_termios;
 
 	if (priv->dma_enabled) {
 		priv->rx_size = RX_BUF_SIZE * RX_BUFS_COUNT;

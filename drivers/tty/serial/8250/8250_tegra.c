@@ -28,11 +28,11 @@ static void tegra_uart_handle_break(struct uart_port *p)
 	unsigned int status, tmout = 10000;
 
 	while (1) {
-		status = p->serial_in(p, UART_LSR);
+		status = p->ops2->serial_in(p, UART_LSR);
 		if (!(status & (UART_LSR_FIFOE | UART_LSR_BRK_ERROR_BITS)))
 			break;
 
-		p->serial_in(p, UART_RX);
+		p->ops2->serial_in(p, UART_RX);
 
 		if (--tmout == 0)
 			break;
@@ -60,7 +60,7 @@ static int tegra_uart_probe(struct platform_device *pdev)
 	port->flags = UPF_BOOT_AUTOCONF | UPF_FIXED_PORT | UPF_FIXED_TYPE;
 	port->type = PORT_TEGRA;
 	port->dev = &pdev->dev;
-	port->handle_break = tegra_uart_handle_break;
+	port->ops2->handle_break = tegra_uart_handle_break;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)

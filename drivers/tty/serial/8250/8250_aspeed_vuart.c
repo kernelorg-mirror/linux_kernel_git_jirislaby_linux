@@ -440,10 +440,10 @@ static int aspeed_vuart_probe(struct platform_device *pdev)
 	port.port.private_data = vuart;
 	port.port.mapbase = res->start;
 	port.port.mapsize = resource_size(res);
-	port.port.startup = aspeed_vuart_startup;
-	port.port.shutdown = aspeed_vuart_shutdown;
-	port.port.throttle = aspeed_vuart_throttle;
-	port.port.unthrottle = aspeed_vuart_unthrottle;
+	port.port.ops2->startup = aspeed_vuart_startup;
+	port.port.ops2->shutdown = aspeed_vuart_shutdown;
+	port.port.ops2->throttle = aspeed_vuart_throttle;
+	port.port.ops2->unthrottle = aspeed_vuart_unthrottle;
 	port.port.status = UPSTAT_SYNC_FIFO;
 	port.port.dev = &pdev->dev;
 	port.port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_8250_CONSOLE);
@@ -474,7 +474,7 @@ static int aspeed_vuart_probe(struct platform_device *pdev)
 	if (of_property_read_u32(np, "current-speed", &prop) == 0)
 		port.port.custom_divisor = port.port.uartclk / (16 * prop);
 
-	port.port.handle_irq = aspeed_vuart_handle_irq;
+	port.port.ops2->handle_irq = aspeed_vuart_handle_irq;
 	port.port.type = PORT_ASPEED_VUART;
 
 	if (port.port.fifosize)

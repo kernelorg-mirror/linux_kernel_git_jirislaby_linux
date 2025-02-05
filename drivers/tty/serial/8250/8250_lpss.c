@@ -144,8 +144,8 @@ static int byt_serial_setup(struct lpss8250 *lpss, struct uart_port *port)
 
 	lpss->dma_maxburst = 16;
 
-	port->set_termios = byt_set_termios;
-	port->get_mctrl = byt_get_mctrl;
+	port->ops2->set_termios = byt_set_termios;
+	port->ops2->get_mctrl = byt_get_mctrl;
 
 	/* Disable TX counter interrupts */
 	writel(BYT_TX_OVF_INT_MASK, port->membase + BYT_TX_OVF_INT);
@@ -176,7 +176,7 @@ static int ehl_serial_setup(struct lpss8250 *lpss, struct uart_port *port)
 
 	lpss->dma_maxburst = 16;
 
-	port->set_termios = dw8250_do_set_termios;
+	port->ops2->set_termios = dw8250_do_set_termios;
 
 	return 0;
 }

@@ -82,10 +82,10 @@ static int ni16550_enable_transceivers(struct uart_port *port)
 {
 	u8 pcr;
 
-	pcr = port->serial_in(port, NI16550_PCR_OFFSET);
+	pcr = port->ops2->serial_in(port, NI16550_PCR_OFFSET);
 	pcr |= NI16550_PCR_TXVR_ENABLE_BIT;
 	dev_dbg(port->dev, "enable transceivers: write pcr: 0x%02x\n", pcr);
-	port->serial_out(port, NI16550_PCR_OFFSET, pcr);
+	port->ops2->serial_out(port, NI16550_PCR_OFFSET, pcr);
 
 	return 0;
 }
@@ -196,7 +196,7 @@ static const struct serial_rs485 ni16550_rs485_supported = {
 
 static void ni16550_rs485_setup(struct uart_port *port)
 {
-	port->rs485_config = ni16550_rs485_config;
+	port->ops2->rs485_config = ni16550_rs485_config;
 	port->rs485_supported = ni16550_rs485_supported;
 	/*
 	 * The hardware comes up by default in 2-wire auto mode and we
@@ -302,8 +302,8 @@ static int ni16550_probe(struct platform_device *pdev)
 
 	uart.port.dev		= dev;
 	uart.port.flags		= UPF_BOOT_AUTOCONF | UPF_FIXED_PORT | UPF_FIXED_TYPE;
-	uart.port.startup	= ni16550_port_startup;
-	uart.port.shutdown	= ni16550_port_shutdown;
+	uart.port.ops2->startup	= ni16550_port_startup;
+	uart.port.ops2->shutdown	= ni16550_port_shutdown;
 
 	/*
 	 * Hardware instantiation of FIFO sizes are held in registers.
@@ -343,7 +343,7 @@ static int ni16550_probe(struct platform_device *pdev)
 	prescaler = info->prescaler;
 	device_property_read_u32(dev, "clock-prescaler", &prescaler);
 	if (prescaler) {
-		uart.port.set_mctrl = ni16550_set_mctrl;
+		uart.port.ops2->set_mctrl = ni16550_set_mctrl;
 		ni16550_config_prescaler(&uart, (u8)prescaler);
 	}
 

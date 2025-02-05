@@ -518,16 +518,16 @@ static int default_setup(struct exar8250 *priv, struct pci_dev *pcidev,
 	if (status == 0x82 || status == 0x84 || status == 0x88) {
 		port->port.type = PORT_XR17V35X;
 
-		port->port.get_divisor = xr17v35x_get_divisor;
-		port->port.set_divisor = xr17v35x_set_divisor;
+		port->port.ops2->get_divisor = xr17v35x_get_divisor;
+		port->port.ops2->set_divisor = xr17v35x_set_divisor;
 
-		port->port.startup = xr17v35x_startup;
+		port->port.ops2->startup = xr17v35x_startup;
 	} else {
 		port->port.type = PORT_XR17D15X;
 	}
 
-	port->port.pm = exar_pm;
-	port->port.shutdown = exar_shutdown;
+	port->port.ops2->pm = exar_pm;
+	port->port.ops2->shutdown = exar_shutdown;
 
 	return 0;
 }
@@ -836,8 +836,8 @@ static int cti_port_setup_common(struct exar8250 *priv,
 		return ret;
 
 	port->port.private_data = (void *)priv;
-	port->port.pm = exar_pm;
-	port->port.shutdown = exar_shutdown;
+	port->port.ops2->pm = exar_pm;
+	port->port.ops2->shutdown = exar_shutdown;
 
 	return 0;
 }
@@ -887,12 +887,12 @@ static int cti_port_setup_fpga(struct exar8250 *priv,
 	offset = idx * UART_EXAR_XR17C15X_PORT_OFFSET;
 	port->port.type = PORT_XR17D15X;
 
-	port->port.get_divisor = xr17v35x_get_divisor;
-	port->port.set_divisor = xr17v35x_set_divisor;
-	port->port.startup = xr17v35x_startup;
+	port->port.ops2->get_divisor = xr17v35x_get_divisor;
+	port->port.ops2->set_divisor = xr17v35x_set_divisor;
+	port->port.ops2->startup = xr17v35x_startup;
 
 	if (CTI_PORT_TYPE_RS485(port_type)) {
-		port->port.rs485_config = generic_rs485_config;
+		port->port.ops2->rs485_config = generic_rs485_config;
 		port->port.rs485_supported = generic_rs485_supported;
 	}
 
@@ -922,20 +922,20 @@ static int cti_port_setup_xr17v35x(struct exar8250 *priv,
 	offset = idx * UART_EXAR_XR17V35X_PORT_OFFSET;
 	port->port.type = PORT_XR17V35X;
 
-	port->port.get_divisor = xr17v35x_get_divisor;
-	port->port.set_divisor = xr17v35x_set_divisor;
-	port->port.startup = xr17v35x_startup;
+	port->port.ops2->get_divisor = xr17v35x_get_divisor;
+	port->port.ops2->set_divisor = xr17v35x_set_divisor;
+	port->port.ops2->startup = xr17v35x_startup;
 
 	switch (port_type) {
 	case CTI_PORT_TYPE_RS422_485:
 	case CTI_PORT_TYPE_RS232_422_485_HW:
-		port->port.rs485_config = cti_rs485_config_mpio_tristate;
+		port->port.ops2->rs485_config = cti_rs485_config_mpio_tristate;
 		port->port.rs485_supported = generic_rs485_supported;
 		break;
 	case CTI_PORT_TYPE_RS232_422_485_SW:
 	case CTI_PORT_TYPE_RS232_422_485_4B:
 	case CTI_PORT_TYPE_RS232_422_485_2B:
-		port->port.rs485_config = generic_rs485_config;
+		port->port.ops2->rs485_config = generic_rs485_config;
 		port->port.rs485_supported = generic_rs485_supported;
 		break;
 	default:
@@ -988,9 +988,9 @@ static int cti_port_setup_xr17v25x(struct exar8250 *priv,
 	port->port.type = PORT_XR17D15X;
 
 	// XR17V25X supports fractional baudrates
-	port->port.get_divisor = xr17v35x_get_divisor;
-	port->port.set_divisor = xr17v35x_set_divisor;
-	port->port.startup = xr17v35x_startup;
+	port->port.ops2->get_divisor = xr17v35x_get_divisor;
+	port->port.ops2->set_divisor = xr17v35x_set_divisor;
+	port->port.ops2->startup = xr17v35x_startup;
 
 	if (CTI_PORT_TYPE_RS485(port_type)) {
 		switch (pcidev->subsystem_device) {
@@ -1006,11 +1006,11 @@ static int cti_port_setup_xr17v25x(struct exar8250 *priv,
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_4_4_XPRS_OPTO:
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_8_XPRS_LP:
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_8_XPRS_LP_485:
-			port->port.rs485_config = cti_rs485_config_mpio_tristate;
+			port->port.ops2->rs485_config = cti_rs485_config_mpio_tristate;
 			break;
 		// Otherwise auto or no power on 485 tri-state support
 		default:
-			port->port.rs485_config = generic_rs485_config;
+			port->port.ops2->rs485_config = generic_rs485_config;
 			break;
 		}
 
@@ -1078,11 +1078,11 @@ static int cti_port_setup_xr17c15x(struct exar8250 *priv,
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_4_4_XPRS_OPTO:
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_8_XPRS_LP:
 		case PCI_SUBDEVICE_ID_CONNECT_TECH_PCI_UART_8_XPRS_LP_485:
-			port->port.rs485_config = cti_rs485_config_mpio_tristate;
+			port->port.ops2->rs485_config = cti_rs485_config_mpio_tristate;
 			break;
 		// Otherwise auto or no power on 485 tri-state support
 		default:
-			port->port.rs485_config = generic_rs485_config;
+			port->port.ops2->rs485_config = generic_rs485_config;
 			break;
 		}
 
@@ -1344,11 +1344,11 @@ pci_xr17v35x_setup(struct exar8250 *priv, struct pci_dev *pcidev,
 	int ret;
 
 	port->port.uartclk = baud * 16;
-	port->port.rs485_config = platform->rs485_config;
+	port->port.ops2->rs485_config = platform->rs485_config;
 	port->port.rs485_supported = *(platform->rs485_supported);
 
 	if (pcidev->subsystem_vendor == PCI_VENDOR_ID_SEALEVEL)
-		port->port.rs485_config = sealevel_rs485_config;
+		port->port.ops2->rs485_config = sealevel_rs485_config;
 
 	/*
 	 * Setup the UART clock for the devices on expansion slot to

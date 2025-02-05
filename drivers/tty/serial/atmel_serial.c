@@ -2523,9 +2523,9 @@ static int atmel_init_port(struct atmel_uart_port *atmel_port,
 	port->dev		= &pdev->dev;
 	port->mapbase		= mpdev->resource[0].start;
 	port->irq		= platform_get_irq(mpdev, 0);
-	port->rs485_config	= atmel_config_rs485;
+	port->ops2->rs485_config	= atmel_config_rs485;
 	port->rs485_supported	= atmel_rs485_supported;
-	port->iso7816_config	= atmel_config_iso7816;
+	port->ops2->iso7816_config	= atmel_config_iso7816;
 	port->membase		= NULL;
 
 	memset(&atmel_port->rx_ring, 0, sizeof(atmel_port->rx_ring));

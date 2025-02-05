@@ -678,10 +678,10 @@ static int pci1xxxx_setup(struct pci_dev *pdev,
 	 * rate calculations, so we can mangle it as we wish.
 	 */
 	port->port.uartclk = 64 * HZ_PER_MHZ;
-	port->port.set_termios = serial8250_do_set_termios;
-	port->port.get_divisor = pci1xxxx_get_divisor;
-	port->port.set_divisor = pci1xxxx_set_divisor;
-	port->port.rs485_config = pci1xxxx_rs485_config;
+	port->port.ops2->set_termios = serial8250_do_set_termios;
+	port->port.ops2->get_divisor = pci1xxxx_get_divisor;
+	port->port.ops2->set_divisor = pci1xxxx_set_divisor;
+	port->port.ops2->rs485_config = pci1xxxx_rs485_config;
 	port->port.rs485_supported = pci1xxxx_rs485_supported;
 
 	/*
@@ -689,9 +689,9 @@ static int pci1xxxx_setup(struct pci_dev *pdev,
 	 * RTS workaround in mctrl is applicable only to B0.
 	 */
 	if (rev >= 0xC0)
-		port->port.handle_irq = pci1xxxx_handle_irq;
+		port->port.ops2->handle_irq = pci1xxxx_handle_irq;
 	else if (rev == 0xB0)
-		port->port.set_mctrl = pci1xxxx_set_mctrl;
+		port->port.ops2->set_mctrl = pci1xxxx_set_mctrl;
 
 	ret = serial8250_pci_setup_port(pdev, port, 0, PORT_OFFSET * port_idx, 0);
 	if (ret < 0)

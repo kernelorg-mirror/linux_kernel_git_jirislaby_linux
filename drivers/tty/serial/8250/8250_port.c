@@ -436,45 +436,45 @@ static void set_io_from_upio(struct uart_port *p)
 	switch (p->iotype) {
 #ifdef CONFIG_HAS_IOPORT
 	case UPIO_HUB6:
-		p->serial_in = hub6_serial_in;
-		p->serial_out = hub6_serial_out;
+		p->ops2->serial_in = hub6_serial_in;
+		p->ops2->serial_out = hub6_serial_out;
 		break;
 #endif
 
 	case UPIO_MEM:
-		p->serial_in = mem_serial_in;
-		p->serial_out = mem_serial_out;
+		p->ops2->serial_in = mem_serial_in;
+		p->ops2->serial_out = mem_serial_out;
 		break;
 
 	case UPIO_MEM16:
-		p->serial_in = mem16_serial_in;
-		p->serial_out = mem16_serial_out;
+		p->ops2->serial_in = mem16_serial_in;
+		p->ops2->serial_out = mem16_serial_out;
 		break;
 
 	case UPIO_MEM32:
-		p->serial_in = mem32_serial_in;
-		p->serial_out = mem32_serial_out;
+		p->ops2->serial_in = mem32_serial_in;
+		p->ops2->serial_out = mem32_serial_out;
 		break;
 
 	case UPIO_MEM32BE:
-		p->serial_in = mem32be_serial_in;
-		p->serial_out = mem32be_serial_out;
+		p->ops2->serial_in = mem32be_serial_in;
+		p->ops2->serial_out = mem32be_serial_out;
 		break;
 #ifdef CONFIG_HAS_IOPORT
 	case UPIO_PORT:
-		p->serial_in = io_serial_in;
-		p->serial_out = io_serial_out;
+		p->ops2->serial_in = io_serial_in;
+		p->ops2->serial_out = io_serial_out;
 		break;
 #endif
 	default:
 		WARN(p->iotype != UPIO_PORT || p->iobase,
 		     "Unsupported UART type %x\n", p->iotype);
-		p->serial_in = no_serial_in;
-		p->serial_out = no_serial_out;
+		p->ops2->serial_in = no_serial_in;
+		p->ops2->serial_out = no_serial_out;
 	}
 	/* Remember loaded iotype */
 	up->cur_iotype = p->iotype;
-	p->handle_irq = serial8250_default_handle_irq;
+	p->ops2->handle_irq = serial8250_default_handle_irq;
 }
 
 static void
@@ -486,11 +486,11 @@ serial_port_out_sync(struct uart_port *p, int offset, int value)
 	case UPIO_MEM32:
 	case UPIO_MEM32BE:
 	case UPIO_AU:
-		p->serial_out(p, offset, value);
-		p->serial_in(p, UART_LCR);	/* safe, no side-effects */
+		p->ops2->serial_out(p, offset, value);
+		p->ops2->serial_in(p, UART_LCR);	/* safe, no side-effects */
 		break;
 	default:
-		p->serial_out(p, offset, value);
+		p->ops2->serial_out(p, offset, value);
 	}
 }
 
@@ -1572,12 +1572,12 @@ static void serial8250_start_tx(struct uart_port *port)
 
 static void serial8250_throttle(struct uart_port *port)
 {
-	port->throttle(port);
+	port->ops2->throttle(port);
 }
 
 static void serial8250_unthrottle(struct uart_port *port)
 {
-	port->unthrottle(port);
+	port->ops2->unthrottle(port);
 }
 
 static void serial8250_disable_ms(struct uart_port *port)
@@ -1935,8 +1935,8 @@ EXPORT_SYMBOL_GPL(serial8250_do_get_mctrl);
 
 static unsigned int serial8250_get_mctrl(struct uart_port *port)
 {
-	if (port->get_mctrl)
-		return port->get_mctrl(port);
+	if (port->ops2->get_mctrl)
+		return port->ops2->get_mctrl(port);
 	return serial8250_do_get_mctrl(port);
 }
 
@@ -1958,8 +1958,8 @@ static void serial8250_set_mctrl(struct uart_port *port, unsigned int mctrl)
 	if (port->rs485.flags & SER_RS485_ENABLED)
 		return;
 
-	if (port->set_mctrl)
-		port->set_mctrl(port, mctrl);
+	if (port->ops2->set_mctrl)
+		port->ops2->set_mctrl(port, mctrl);
 	else
 		serial8250_do_set_mctrl(port, mctrl);
 }
@@ -2165,7 +2165,7 @@ static void serial8250_set_TRG_levels(struct uart_port *port)
 		}
 		serial_port_out(port, UART_ALTR_AFR, UART_ALTR_EN_TXFIFO_LW);
 		serial_port_out(port, UART_ALTR_TX_LOW, port->fifosize - up->tx_loadsz);
-		port->handle_irq = serial8250_tx_threshold_handle_irq;
+		port->ops2->handle_irq = serial8250_tx_threshold_handle_irq;
 		break;
 	}
 }
@@ -2380,8 +2380,8 @@ EXPORT_SYMBOL_GPL(serial8250_do_startup);
 
 static int serial8250_startup(struct uart_port *port)
 {
-	if (port->startup)
-		return port->startup(port);
+	if (port->ops2->startup)
+		return port->ops2->startup(port);
 	return serial8250_do_startup(port);
 }
 
@@ -2438,8 +2438,8 @@ EXPORT_SYMBOL_GPL(serial8250_do_shutdown);
 
 static void serial8250_shutdown(struct uart_port *port)
 {
-	if (port->shutdown)
-		port->shutdown(port);
+	if (port->ops2->shutdown)
+		port->ops2->shutdown(port);
 	else
 		serial8250_do_shutdown(port);
 }
@@ -2512,8 +2512,8 @@ static unsigned int serial8250_get_divisor(struct uart_port *port,
 					   unsigned int baud,
 					   unsigned int *frac)
 {
-	if (port->get_divisor)
-		return port->get_divisor(port, baud, frac);
+	if (port->ops2->get_divisor)
+		return port->ops2->get_divisor(port, baud, frac);
 
 	return serial8250_do_get_divisor(port, baud, frac);
 }
@@ -2567,8 +2567,8 @@ EXPORT_SYMBOL_GPL(serial8250_do_set_divisor);
 static void serial8250_set_divisor(struct uart_port *port, unsigned int baud,
 				   unsigned int quot, unsigned int quot_frac)
 {
-	if (port->set_divisor)
-		port->set_divisor(port, baud, quot, quot_frac);
+	if (port->ops2->set_divisor)
+		port->ops2->set_divisor(port, baud, quot, quot_frac);
 	else
 		serial8250_do_set_divisor(port, baud, quot);
 }
@@ -2787,8 +2787,8 @@ static void
 serial8250_set_termios(struct uart_port *port, struct ktermios *termios,
 		       const struct ktermios *old)
 {
-	if (port->set_termios)
-		port->set_termios(port, termios, old);
+	if (port->ops2->set_termios)
+		port->ops2->set_termios(port, termios, old);
 	else
 		serial8250_do_set_termios(port, termios, old);
 }
@@ -2812,8 +2812,8 @@ EXPORT_SYMBOL_GPL(serial8250_do_set_ldisc);
 static void
 serial8250_set_ldisc(struct uart_port *port, struct ktermios *termios)
 {
-	if (port->set_ldisc)
-		port->set_ldisc(port, termios);
+	if (port->ops2->set_ldisc)
+		port->ops2->set_ldisc(port, termios);
 	else
 		serial8250_do_set_ldisc(port, termios);
 }
@@ -2831,8 +2831,8 @@ static void
 serial8250_pm(struct uart_port *port, unsigned int state,
 	      unsigned int oldstate)
 {
-	if (port->pm)
-		port->pm(port, state, oldstate);
+	if (port->ops2->pm)
+		port->ops2->pm(port, state, oldstate);
 	else
 		serial8250_do_pm(port, state, oldstate);
 }
@@ -3156,7 +3156,7 @@ void serial8250_init_port(struct uart_8250_port *up)
 
 	spin_lock_init(&port->lock);
 	port->ctrl_id = 0;
-	port->pm = NULL;
+	port->ops2->pm = NULL;
 	port->ops = &serial8250_pops;
 	port->has_sysrq = IS_ENABLED(CONFIG_SERIAL_8250_CONSOLE);
 

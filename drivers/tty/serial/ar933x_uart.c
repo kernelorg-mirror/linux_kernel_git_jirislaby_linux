@@ -765,7 +765,7 @@ static int ar933x_uart_probe(struct platform_device *pdev)
 	port->regshift = 2;
 	port->fifosize = AR933X_UART_FIFO_SIZE;
 	port->ops = &ar933x_uart_ops;
-	port->rs485_config = ar933x_config_rs485;
+	port->ops2->rs485_config = ar933x_config_rs485;
 	port->rs485_supported = ar933x_rs485_supported;
 
 	baud = ar933x_uart_get_baud(port->uartclk, AR933X_UART_MAX_SCALE, 1);

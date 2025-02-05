@@ -83,7 +83,7 @@ static irqreturn_t serial8250_interrupt(int irq, void *dev_id)
 		up = list_entry(l, struct uart_8250_port, list);
 		port = &up->port;
 
-		if (port->handle_irq(port)) {
+		if (port->ops2->handle_irq(port)) {
 			handled = 1;
 			end = NULL;
 		} else if (end == NULL)
@@ -208,7 +208,7 @@ static void serial8250_timeout(struct timer_list *t)
 {
 	struct uart_8250_port *up = from_timer(up, t, timer);
 
-	up->port.handle_irq(&up->port);
+	up->port.ops2->handle_irq(&up->port);
 	mod_timer(&up->timer, jiffies + uart_poll_timeout(&up->port));
 }
 
@@ -561,12 +561,12 @@ int __init early_serial_setup(struct uart_port *port)
 
 	serial8250_set_defaults(up_to_u8250p(p));
 
-	if (port->serial_in)
-		p->serial_in = port->serial_in;
-	if (port->serial_out)
-		p->serial_out = port->serial_out;
-	if (port->handle_irq)
-		p->handle_irq = port->handle_irq;
+	if (port->ops2->serial_in)
+		p->ops2->serial_in = port->ops2->serial_in;
+	if (port->ops2->serial_out)
+		p->ops2->serial_out = port->ops2->serial_out;
+	if (port->ops2->handle_irq)
+		p->ops2->handle_irq = port->ops2->handle_irq;
 
 	return 0;
 }
@@ -737,9 +737,9 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
 		uart->port.private_data = up->port.private_data;
 		uart->tx_loadsz		= up->tx_loadsz;
 		uart->capabilities	= up->capabilities;
-		uart->port.throttle	= up->port.throttle;
-		uart->port.unthrottle	= up->port.unthrottle;
-		uart->port.rs485_config	= up->port.rs485_config;
+		uart->port.ops2->throttle	= up->port.ops2->throttle;
+		uart->port.ops2->unthrottle	= up->port.ops2->unthrottle;
+		uart->port.ops2->rs485_config	= up->port.ops2->rs485_config;
 		uart->port.rs485_supported = up->port.rs485_supported;
 		uart->port.rs485	= up->port.rs485;
 		uart->ops->rs485_start_tx	= up->ops->rs485_start_tx;
@@ -776,35 +776,34 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
 		}
 
 		serial8250_set_defaults(uart);
-
 		/* Possibly override default I/O functions.  */
-		if (up->port.serial_in)
-			uart->port.serial_in = up->port.serial_in;
-		if (up->port.serial_out)
-			uart->port.serial_out = up->port.serial_out;
-		if (up->port.handle_irq)
-			uart->port.handle_irq = up->port.handle_irq;
+		if (up->port.ops2->serial_in)
+			uart->port.ops2->serial_in = up->port.ops2->serial_in;
+		if (up->port.ops2->serial_out)
+			uart->port.ops2->serial_out = up->port.ops2->serial_out;
+		if (up->port.ops2->handle_irq)
+			uart->port.ops2->handle_irq = up->port.ops2->handle_irq;
 		/*  Possibly override set_termios call */
-		if (up->port.set_termios)
-			uart->port.set_termios = up->port.set_termios;
-		if (up->port.set_ldisc)
-			uart->port.set_ldisc = up->port.set_ldisc;
-		if (up->port.get_mctrl)
-			uart->port.get_mctrl = up->port.get_mctrl;
-		if (up->port.set_mctrl)
-			uart->port.set_mctrl = up->port.set_mctrl;
-		if (up->port.get_divisor)
-			uart->port.get_divisor = up->port.get_divisor;
-		if (up->port.set_divisor)
-			uart->port.set_divisor = up->port.set_divisor;
-		if (up->port.startup)
-			uart->port.startup = up->port.startup;
-		if (up->port.shutdown)
-			uart->port.shutdown = up->port.shutdown;
-		if (up->port.pm)
-			uart->port.pm = up->port.pm;
-		if (up->port.handle_break)
-			uart->port.handle_break = up->port.handle_break;
+		if (up->port.ops2->set_termios)
+			uart->port.ops2->set_termios = up->port.ops2->set_termios;
+		if (up->port.ops2->set_ldisc)
+			uart->port.ops2->set_ldisc = up->port.ops2->set_ldisc;
+		if (up->port.ops2->get_mctrl)
+			uart->port.ops2->get_mctrl = up->port.ops2->get_mctrl;
+		if (up->port.ops2->set_mctrl)
+			uart->port.ops2->set_mctrl = up->port.ops2->set_mctrl;
+		if (up->port.ops2->get_divisor)
+			uart->port.ops2->get_divisor = up->port.ops2->get_divisor;
+		if (up->port.ops2->set_divisor)
+			uart->port.ops2->set_divisor = up->port.ops2->set_divisor;
+		if (up->port.ops2->startup)
+			uart->port.ops2->startup = up->port.ops2->startup;
+		if (up->port.ops2->shutdown)
+			uart->port.ops2->shutdown = up->port.ops2->shutdown;
+		if (up->port.ops2->pm)
+			uart->port.ops2->pm = up->port.ops2->pm;
+		if (up->port.ops2->handle_break)
+			uart->port.ops2->handle_break = up->port.ops2->handle_break;
 		if (up->ops->dl_read)
 			uart->ops->dl_read = up->ops->dl_read;
 		if (up->ops->dl_write)

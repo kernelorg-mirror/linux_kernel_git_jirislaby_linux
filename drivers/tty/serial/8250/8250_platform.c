@@ -177,18 +177,18 @@ static int serial8250_probe_platform(struct platform_device *dev, struct plat_se
 		uart.port.private_data	= p->private_data;
 		uart.port.type		= p->type;
 		uart.bugs		= p->bugs;
-		uart.port.serial_in	= p->serial_in;
-		uart.port.serial_out	= p->serial_out;
+		uart.port.ops2->serial_in	= p->serial_in;
+		uart.port.ops2->serial_out	= p->serial_out;
 #ifdef TODO
 		uart.dl_read		= p->ops->dl_read;
 		uart.dl_write		= p->ops->dl_write;
 #endif
-		uart.port.handle_irq	= p->handle_irq;
-		uart.port.handle_break	= p->handle_break;
-		uart.port.set_termios	= p->set_termios;
-		uart.port.set_ldisc	= p->set_ldisc;
-		uart.port.get_mctrl	= p->get_mctrl;
-		uart.port.pm		= p->pm;
+		uart.port.ops2->handle_irq	= p->handle_irq;
+		uart.port.ops2->handle_break	= p->handle_break;
+		uart.port.ops2->set_termios	= p->set_termios;
+		uart.port.ops2->set_ldisc	= p->set_ldisc;
+		uart.port.ops2->get_mctrl	= p->get_mctrl;
+		uart.port.ops2->pm		= p->pm;
 		uart.port.dev		= &dev->dev;
 		uart.port.irqflags	|= irqflag;
 		ret = serial8250_register_8250_port(&uart);

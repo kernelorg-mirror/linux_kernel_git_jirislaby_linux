@@ -439,39 +439,43 @@ enum uart_iotype {
 	UPIO_MEM16	= SERIAL_IO_MEM16,	/* 16b little endian */
 };
 
+struct uart_port_ops {
+	unsigned int	(*serial_in)(struct uart_port *, int);
+	void		(*serial_out)(struct uart_port *, int, int);
+	void		(*set_termios)(struct uart_port *,
+			               struct ktermios *new,
+			               const struct ktermios *old);
+	void		(*set_ldisc)(struct uart_port *,
+				     struct ktermios *);
+	unsigned int	(*get_mctrl)(struct uart_port *);
+	void		(*set_mctrl)(struct uart_port *, unsigned int);
+	unsigned int	(*get_divisor)(struct uart_port *,
+				       unsigned int baud,
+				       unsigned int *frac);
+	void		(*set_divisor)(struct uart_port *,
+				       unsigned int baud,
+				       unsigned int quot,
+				       unsigned int quot_frac);
+	int		(*startup)(struct uart_port *port);
+	void		(*shutdown)(struct uart_port *port);
+	void		(*throttle)(struct uart_port *port);
+	void		(*unthrottle)(struct uart_port *port);
+	int		(*handle_irq)(struct uart_port *);
+	void		(*pm)(struct uart_port *, unsigned int state,
+			      unsigned int old);
+	void		(*handle_break)(struct uart_port *);
+	int		(*rs485_config)(struct uart_port *,
+					struct ktermios *termios,
+					struct serial_rs485 *rs485);
+	int		(*iso7816_config)(struct uart_port *,
+					  struct serial_iso7816 *iso7816);
+};
+
 struct uart_port {
 	spinlock_t		lock;			/* port lock */
 	unsigned long		iobase;			/* in/out[bwl] */
 	unsigned char __iomem	*membase;		/* read/write[bwl] */
-	unsigned int		(*serial_in)(struct uart_port *, int);
-	void			(*serial_out)(struct uart_port *, int, int);
-	void			(*set_termios)(struct uart_port *,
-				               struct ktermios *new,
-				               const struct ktermios *old);
-	void			(*set_ldisc)(struct uart_port *,
-					     struct ktermios *);
-	unsigned int		(*get_mctrl)(struct uart_port *);
-	void			(*set_mctrl)(struct uart_port *, unsigned int);
-	unsigned int		(*get_divisor)(struct uart_port *,
-					       unsigned int baud,
-					       unsigned int *frac);
-	void			(*set_divisor)(struct uart_port *,
-					       unsigned int baud,
-					       unsigned int quot,
-					       unsigned int quot_frac);
-	int			(*startup)(struct uart_port *port);
-	void			(*shutdown)(struct uart_port *port);
-	void			(*throttle)(struct uart_port *port);
-	void			(*unthrottle)(struct uart_port *port);
-	int			(*handle_irq)(struct uart_port *);
-	void			(*pm)(struct uart_port *, unsigned int state,
-				      unsigned int old);
-	void			(*handle_break)(struct uart_port *);
-	int			(*rs485_config)(struct uart_port *,
-						struct ktermios *termios,
-						struct serial_rs485 *rs485);
-	int			(*iso7816_config)(struct uart_port *,
-						  struct serial_iso7816 *iso7816);
+	struct uart_port_ops *ops2;
 	unsigned int		ctrl_id;		/* optional serial core controller id */
 	unsigned int		port_id;		/* optional serial core port id */
 	unsigned int		irq;			/* irq number */
@@ -803,12 +807,12 @@ DEFINE_LOCK_GUARD_1_COND(uart_port_lock_irqsave, _try,
 
 static inline int serial_port_in(struct uart_port *up, int offset)
 {
-	return up->serial_in(up, offset);
+	return up->ops2->serial_in(up, offset);
 }
 
 static inline void serial_port_out(struct uart_port *up, int offset, int value)
 {
-	up->serial_out(up, offset, value);
+	up->ops2->serial_out(up, offset, value);
 }
 
 /**
@@ -1283,8 +1287,8 @@ static inline int uart_handle_break(struct uart_port *port)
 {
 	struct uart_state *state = port->state;
 
-	if (port->handle_break)
-		port->handle_break(port);
+	if (port->ops2->handle_break)
+		port->ops2->handle_break(port);
 
 #ifdef CONFIG_MAGIC_SYSRQ_SERIAL
 	if (port->has_sysrq && uart_console(port)) {

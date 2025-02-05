@@ -104,8 +104,8 @@ static void ce4100_serial_fixup(int port, struct uart_port *up,
 	}
 #endif
 	up->iobase = 0;
-	up->serial_in = ce4100_mem_serial_in;
-	up->serial_out = ce4100_mem_serial_out;
+	up->ops2->serial_in = ce4100_mem_serial_in;
+	up->ops2->serial_out = ce4100_mem_serial_out;
 
 	*capabilities |= (1 << 12);
 }

@@ -1302,9 +1302,9 @@ static int pci_oxsemi_tornado_setup(struct serial_private *priv,
 
 	if (pci_oxsemi_tornado_p(dev)) {
 		up->port.flags |= UPF_FULL_PROBE;
-		up->port.get_divisor = pci_oxsemi_tornado_get_divisor;
-		up->port.set_divisor = pci_oxsemi_tornado_set_divisor;
-		up->port.set_mctrl = pci_oxsemi_tornado_set_mctrl;
+		up->port.ops2->get_divisor = pci_oxsemi_tornado_get_divisor;
+		up->port.ops2->set_divisor = pci_oxsemi_tornado_set_divisor;
+		up->port.ops2->set_mctrl = pci_oxsemi_tornado_set_mctrl;
 	}
 
 	return pci_default_setup(priv, board, up, idx);
@@ -1670,7 +1670,7 @@ static int pci_fintek_setup(struct serial_private *priv,
 
 	port->port.iotype = UPIO_PORT;
 	port->port.iobase = iobase;
-	port->port.rs485_config = pci_fintek_rs485_config;
+	port->port.ops2->rs485_config = pci_fintek_rs485_config;
 	port->port.rs485_supported = pci_fintek_rs485_supported;
 
 	data = devm_kzalloc(&pdev->dev, sizeof(u8), GFP_KERNEL);
@@ -1780,7 +1780,7 @@ static int pci_fintek_f815xxa_setup(struct serial_private *priv,
 	port->port.iotype = UPIO_MEM;
 	port->port.flags |= UPF_IOREMAP;
 	port->port.mapbase = pci_resource_start(pdev, 0) + 8 * idx;
-	port->port.serial_out = f815xxa_mem_serial_out;
+	port->port.ops2->serial_out = f815xxa_mem_serial_out;
 
 	return 0;
 }
@@ -1877,8 +1877,8 @@ static int kt_serial_setup(struct serial_private *priv,
 		return serial_8250_warn_need_ioport(priv->dev);
 
 	port->port.flags |= UPF_BUG_THRE;
-	port->port.serial_in = kt_serial_in;
-	port->port.handle_break = kt_handle_break;
+	port->port.ops2->serial_in = kt_serial_in;
+	port->port.ops2->handle_break = kt_handle_break;
 	return skip_tx_en_setup(priv, board, port, idx);
 }
 

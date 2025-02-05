@@ -247,11 +247,11 @@ void dw8250_setup_port(struct uart_port *p)
 
 	pd->hw_rs485_support = dw8250_detect_rs485_hw(p);
 	if (pd->hw_rs485_support) {
-		p->rs485_config = dw8250_rs485_config;
+		p->ops2->rs485_config = dw8250_rs485_config;
 		up->lsr_save_mask = LSR_SAVE_FLAGS | DW_UART_LSR_ADDR_RCVD;
 		p->rs485_supported = dw8250_rs485_supported;
 	} else {
-		p->rs485_config = serial8250_em485_config;
+		p->ops2->rs485_config = serial8250_em485_config;
 		p->rs485_supported = serial8250_em485_supported;
 		up->ops->rs485_start_tx = serial8250_em485_start_tx;
 		up->ops->rs485_stop_tx = serial8250_em485_stop_tx;
@@ -266,8 +266,8 @@ void dw8250_setup_port(struct uart_port *p)
 
 	if (reg) {
 		pd->dlf_size = fls(reg);
-		p->get_divisor = dw8250_get_divisor;
-		p->set_divisor = dw8250_set_divisor;
+		p->ops2->get_divisor = dw8250_get_divisor;
+		p->ops2->set_divisor = dw8250_set_divisor;
 	}
 
 	reg = dw8250_readl_ext(p, DW_UART_UCV);

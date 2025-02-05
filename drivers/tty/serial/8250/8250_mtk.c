@@ -551,16 +551,16 @@ static int mtk8250_probe(struct platform_device *pdev)
 	spin_lock_init(&uart.port.lock);
 	uart.port.mapbase = regs->start;
 	uart.port.irq = irq;
-	uart.port.pm = mtk8250_do_pm;
+	uart.port.ops2->pm = mtk8250_do_pm;
 	uart.port.type = PORT_16550;
 	uart.port.flags = UPF_BOOT_AUTOCONF | UPF_FIXED_PORT;
 	uart.port.dev = &pdev->dev;
 	uart.port.iotype = UPIO_MEM32;
 	uart.port.regshift = 2;
 	uart.port.private_data = data;
-	uart.port.shutdown = mtk8250_shutdown;
-	uart.port.startup = mtk8250_startup;
-	uart.port.set_termios = mtk8250_set_termios;
+	uart.port.ops2->shutdown = mtk8250_shutdown;
+	uart.port.ops2->startup = mtk8250_startup;
+	uart.port.ops2->set_termios = mtk8250_set_termios;
 	uart.port.uartclk = clk_get_rate(data->uart_clk);
 #ifdef CONFIG_SERIAL_8250_DMA
 	if (data->dma)

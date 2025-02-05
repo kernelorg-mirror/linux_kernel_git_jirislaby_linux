@@ -1499,7 +1499,7 @@ static int serial_omap_probe_rs485(struct uart_omap_port *up,
 	if (!np)
 		return 0;
 
-	up->port.rs485_config = serial_omap_config_rs485;
+	up->port.ops2->rs485_config = serial_omap_config_rs485;
 	up->port.rs485_supported = serial_omap_rs485_supported;
 
 	ret = uart_get_rs485_mode(&up->port);

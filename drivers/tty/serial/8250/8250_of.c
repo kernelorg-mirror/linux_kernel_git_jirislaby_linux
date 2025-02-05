@@ -56,8 +56,8 @@ static unsigned int npcm_get_divisor(struct uart_port *port, unsigned int baud,
 
 static int npcm_setup(struct uart_port *port)
 {
-	port->get_divisor = npcm_get_divisor;
-	port->startup = npcm_startup;
+	port->ops2->get_divisor = npcm_get_divisor;
+	port->ops2->startup = npcm_startup;
 	return 0;
 }
 
@@ -161,7 +161,7 @@ static int of_platform_serial_setup(struct platform_device *ofdev,
 		goto err_pmruntime;
 
 	port->type = type;
-	port->rs485_config = serial8250_em485_config;
+	port->ops2->rs485_config = serial8250_em485_config;
 	port->rs485_supported = serial8250_em485_supported;
 	up->ops->rs485_start_tx = serial8250_em485_start_tx;
 	up->ops->rs485_stop_tx = serial8250_em485_stop_tx;
@@ -184,7 +184,7 @@ static int of_platform_serial_setup(struct platform_device *ofdev,
 	if (IS_REACHABLE(CONFIG_SERIAL_8250_FSL) &&
 	    (of_device_is_compatible(np, "fsl,ns16550") ||
 	     of_device_is_compatible(np, "fsl,16550-FIFO64"))) {
-		port->handle_irq = fsl8250_handle_irq;
+		port->ops2->handle_irq = fsl8250_handle_irq;
 		port->has_sysrq = IS_ENABLED(CONFIG_SERIAL_8250_CONSOLE);
 	}
 

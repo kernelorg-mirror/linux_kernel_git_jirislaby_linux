@@ -85,8 +85,8 @@ int rt288x_setup(struct uart_port *p)
 
 	p->iotype = UPIO_AU;
 
-	p->serial_in = au_serial_in;
-	p->serial_out = au_serial_out;
+	p->ops2->serial_in = au_serial_in;
+	p->ops2->serial_out = au_serial_out;
 	up->ops->dl_read = au_serial_dl_read;
 	up->ops->dl_write = au_serial_dl_write;
 

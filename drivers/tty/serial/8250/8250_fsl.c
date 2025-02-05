@@ -133,7 +133,7 @@ static int fsl8250_acpi_probe(struct platform_device *pdev)
 
 	port8250.port.mapbase           = regs->start;
 	port8250.port.irq               = irq;
-	port8250.port.handle_irq        = fsl8250_handle_irq;
+	port8250.port.ops2->handle_irq  = fsl8250_handle_irq;
 	port8250.port.type              = PORT_16550A;
 	port8250.port.flags             = UPF_SHARE_IRQ | UPF_BOOT_AUTOCONF
 						| UPF_FIXED_PORT | UPF_IOREMAP

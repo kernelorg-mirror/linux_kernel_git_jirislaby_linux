@@ -2466,7 +2466,7 @@ static int imx_uart_probe(struct platform_device *pdev)
 	sport->port.fifosize = 32;
 	sport->port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_IMX_CONSOLE);
 	sport->port.ops = &imx_uart_pops;
-	sport->port.rs485_config = imx_uart_rs485_config;
+	sport->port.ops2->rs485_config = imx_uart_rs485_config;
 	/* RTS is required to control the RS485 transmitter */
 	if (sport->have_rtscts || sport->have_rtsgpio)
 		sport->port.rs485_supported = imx_rs485_supported;

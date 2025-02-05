@@ -496,8 +496,8 @@ static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
 
 #ifdef CONFIG_64BIT
 	if (quirks & DW_UART_QUIRK_OCTEON) {
-		p->serial_in = dw8250_serial_inq;
-		p->serial_out = dw8250_serial_outq;
+		p->ops2->serial_in = dw8250_serial_inq;
+		p->ops2->serial_out = dw8250_serial_outq;
 		p->flags = UPF_SKIP_TEST | UPF_SHARE_IRQ | UPF_FIXED_TYPE;
 		p->type = PORT_OCTEON;
 		data->skip_autocfg = true;
@@ -505,9 +505,9 @@ static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
 #endif
 
 	if (quirks & DW_UART_QUIRK_ARMADA_38X)
-		p->serial_out = dw8250_serial_out38x;
+		p->ops2->serial_out = dw8250_serial_out38x;
 	if (quirks & DW_UART_QUIRK_SKIP_SET_RATE)
-		p->set_termios = dw8250_do_set_termios;
+		p->ops2->set_termios = dw8250_do_set_termios;
 	if (quirks & DW_UART_QUIRK_IS_DMA_FC) {
 		data->data.dma.txconf.device_fc = 1;
 		data->data.dma.rxconf.device_fc = 1;
@@ -517,7 +517,7 @@ static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
 	if (quirks & DW_UART_QUIRK_APMC0D08) {
 		p->iotype = UPIO_MEM32;
 		p->regshift = 2;
-		p->serial_in = dw8250_serial_in32;
+		p->ops2->serial_in = dw8250_serial_in32;
 		data->uart_16550_compatible = true;
 	}
 }
@@ -541,12 +541,12 @@ static int dw8250_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, -EINVAL, "no registers defined\n");
 
 	spin_lock_init(&p->lock);
-	p->pm		= dw8250_do_pm;
+	p->ops2->pm		= dw8250_do_pm;
 	p->type		= PORT_8250;
 	p->flags	= UPF_FIXED_PORT;
 	p->dev		= dev;
-	p->set_ldisc	= dw8250_set_ldisc;
-	p->set_termios	= dw8250_set_termios;
+	p->ops2->set_ldisc	= dw8250_set_ldisc;
+	p->ops2->set_termios	= dw8250_set_termios;
 
 	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
@@ -570,16 +570,16 @@ static int dw8250_probe(struct platform_device *pdev)
 
 	switch (p->iotype) {
 	case UPIO_MEM:
-		p->serial_in = dw8250_serial_in;
-		p->serial_out = dw8250_serial_out;
+		p->ops2->serial_in = dw8250_serial_in;
+		p->ops2->serial_out = dw8250_serial_out;
 		break;
 	case UPIO_MEM32:
-		p->serial_in = dw8250_serial_in32;
-		p->serial_out = dw8250_serial_out32;
+		p->ops2->serial_in = dw8250_serial_in32;
+		p->ops2->serial_out = dw8250_serial_out32;
 		break;
 	case UPIO_MEM32BE:
-		p->serial_in = dw8250_serial_in32be;
-		p->serial_out = dw8250_serial_out32be;
+		p->ops2->serial_in = dw8250_serial_in32be;
+		p->ops2->serial_out = dw8250_serial_out32be;
 		break;
 	default:
 		return -ENODEV;
@@ -649,9 +649,9 @@ static int dw8250_probe(struct platform_device *pdev)
 
 	/* If the Busy Functionality is not implemented, don't handle it */
 	if (data->uart_16550_compatible)
-		p->handle_irq = NULL;
+		p->ops2->handle_irq = NULL;
 	else if (data->pdata)
-		p->handle_irq = dw8250_handle_irq;
+		p->ops2->handle_irq = dw8250_handle_irq;
 
 	dw8250_setup_dma_filter(p, data);
 

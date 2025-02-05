@@ -145,9 +145,9 @@ static int lpc18xx_serial_probe(struct platform_device *pdev)
 	uart.port.flags = UPF_FIXED_PORT | UPF_FIXED_TYPE | UPF_SKIP_TEST;
 	uart.port.uartclk = clk_get_rate(data->clk_uart);
 	uart.port.private_data = data;
-	uart.port.rs485_config = lpc18xx_rs485_config;
+	uart.port.ops2->rs485_config = lpc18xx_rs485_config;
 	uart.port.rs485_supported = lpc18xx_rs485_supported;
-	uart.port.serial_out = lpc18xx_uart_serial_out;
+	uart.port.ops2->serial_out = lpc18xx_uart_serial_out;
 
 	ret = uart_read_port_properties(&uart.port);
 	if (ret)

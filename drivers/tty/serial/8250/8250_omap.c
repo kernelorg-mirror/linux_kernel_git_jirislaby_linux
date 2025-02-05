@@ -364,7 +364,7 @@ static void omap8250_restore_regs(struct uart_8250_port *up)
 	serial_out(up, UART_OMAP_MDR3, priv->mdr3);
 
 	if (up->port.rs485.flags & SER_RS485_ENABLED &&
-	    up->port.rs485_config == serial8250_em485_config)
+	    up->port.ops2->rs485_config == serial8250_em485_config)
 		serial8250_em485_stop_tx(up, true);
 }
 
@@ -893,7 +893,7 @@ static int omap8250_rs485_config(struct uart_port *port,
 		priv->mdr3 &= ~UART_OMAP_MDR3_DIR_EN;
 		serial_out(up, UART_OMAP_MDR3, priv->mdr3);
 
-		port->rs485_config = serial8250_em485_config;
+		port->ops2->rs485_config = serial8250_em485_config;
 		return serial8250_em485_config(port, termios, rs485);
 	}
 
@@ -1468,14 +1468,14 @@ static int omap8250_probe(struct platform_device *pdev)
 	 */
 	up.capabilities |= UART_CAP_RPM;
 #endif
-	up.port.set_termios = omap_8250_set_termios;
-	up.port.set_mctrl = omap8250_set_mctrl;
-	up.port.pm = omap_8250_pm;
-	up.port.startup = omap_8250_startup;
-	up.port.shutdown = omap_8250_shutdown;
-	up.port.throttle = omap_8250_throttle;
-	up.port.unthrottle = omap_8250_unthrottle;
-	up.port.rs485_config = omap8250_rs485_config;
+	up.port.ops2->set_termios = omap_8250_set_termios;
+	up.port.ops2->set_mctrl = omap8250_set_mctrl;
+	up.port.ops2->pm = omap_8250_pm;
+	up.port.ops2->startup = omap_8250_startup;
+	up.port.ops2->shutdown = omap_8250_shutdown;
+	up.port.ops2->throttle = omap_8250_throttle;
+	up.port.ops2->unthrottle = omap_8250_unthrottle;
+	up.port.ops2->rs485_config = omap8250_rs485_config;
 	/* same rs485_supported for software emulation and native RS485 */
 	up.port.rs485_supported = serial8250_em485_supported;
 	up.ops->rs485_start_tx = serial8250_em485_start_tx;
@@ -1547,7 +1547,7 @@ static int omap8250_probe(struct platform_device *pdev)
 	pm_runtime_get_sync(&pdev->dev);
 
 	omap_serial_fill_features_erratas(&up, priv);
-	up.port.handle_irq = omap8250_no_handle_irq;
+	up.port.ops2->handle_irq = omap8250_no_handle_irq;
 	priv->rx_trigger = RX_TRIGGER;
 	priv->tx_trigger = TX_TRIGGER;
 #ifdef CONFIG_SERIAL_8250_DMA

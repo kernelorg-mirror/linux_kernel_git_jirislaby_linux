@@ -134,12 +134,12 @@ extern struct uart_ops univ8250_port_ops;
 
 static inline int serial_in(struct uart_8250_port *up, int offset)
 {
-	return up->port.serial_in(&up->port, offset);
+	return up->port.ops2->serial_in(&up->port, offset);
 }
 
 static inline void serial_out(struct uart_8250_port *up, int offset, int value)
 {
-	up->port.serial_out(&up->port, offset, value);
+	up->port.ops2->serial_out(&up->port, offset, value);
 }
 
 /**

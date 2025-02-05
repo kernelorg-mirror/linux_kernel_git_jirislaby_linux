@@ -115,7 +115,7 @@ static int serial_pxa_probe(struct platform_device *pdev)
 	uart.port.flags = UPF_IOREMAP | UPF_SKIP_TEST | UPF_FIXED_TYPE;
 	uart.port.dev = &pdev->dev;
 	uart.port.uartclk = clk_get_rate(data->clk);
-	uart.port.pm = serial_pxa_pm;
+	uart.port.ops2->pm = serial_pxa_pm;
 	uart.port.private_data = data;
 
 	ret = uart_read_port_properties(&uart.port);

@@ -588,7 +588,7 @@ static int mcf_probe(struct platform_device *pdev)
 		port->uartclk = MCF_BUSCLK;
 		port->ops = &mcf_uart_ops;
 		port->flags = UPF_BOOT_AUTOCONF;
-		port->rs485_config = mcf_config_rs485;
+		port->ops2->rs485_config = mcf_config_rs485;
 		port->rs485_supported = mcf_rs485_supported;
 		port->has_sysrq = IS_ENABLED(CONFIG_SERIAL_MCF_CONSOLE);
 

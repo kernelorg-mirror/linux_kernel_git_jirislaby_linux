@@ -191,7 +191,7 @@ static void ingenic_uart_serial_out(struct uart_port *p, int offset, int value)
 		 * If we have enabled modem status IRQs we should enable
 		 * modem mode.
 		 */
-		ier = p->serial_in(p, UART_IER);
+		ier = p->ops2->serial_in(p, UART_IER);
 
 		if (ier & UART_IER_MSI)
 			value |= UART_MCR_MDCE | UART_MCR_FCM;
@@ -256,8 +256,8 @@ static int ingenic_uart_probe(struct platform_device *pdev)
 	uart.port.type = PORT_16550A;
 	uart.port.flags = UPF_SKIP_TEST | UPF_IOREMAP | UPF_FIXED_TYPE;
 	uart.port.mapbase = regs->start;
-	uart.port.serial_out = ingenic_uart_serial_out;
-	uart.port.serial_in = ingenic_uart_serial_in;
+	uart.port.ops2->serial_out = ingenic_uart_serial_out;
+	uart.port.ops2->serial_in = ingenic_uart_serial_in;
 	uart.port.dev = &pdev->dev;
 	uart.tx_loadsz = cdata->tx_loadsz;
 	uart.capabilities = UART_CAP_FIFO | UART_CAP_RTOIE;

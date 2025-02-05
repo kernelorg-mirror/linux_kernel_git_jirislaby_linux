@@ -214,8 +214,8 @@ static int uniphier_uart_probe(struct platform_device *pdev)
 	if (of_property_read_bool(dev->of_node, "auto-flow-control"))
 		up.capabilities |= UART_CAP_AFE;
 
-	up.port.serial_in = uniphier_serial_in;
-	up.port.serial_out = uniphier_serial_out;
+	up.port.ops2->serial_in = uniphier_serial_in;
+	up.port.ops2->serial_out = uniphier_serial_out;
 	up.ops->dl_read = uniphier_serial_dl_read;
 	up.ops->dl_write = uniphier_serial_dl_write;
 

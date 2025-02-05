@@ -124,7 +124,7 @@ static int tng_setup(struct mid8250 *mid, struct uart_port *p)
 	mid->dma_index = index;
 	mid->dma_dev = pci_get_slot(pdev->bus, PCI_DEVFN(5, 0));
 
-	p->handle_irq = tng_handle_irq;
+	p->ops2->handle_irq = tng_handle_irq;
 	return 0;
 }
 
@@ -191,7 +191,7 @@ static int dnv_setup(struct mid8250 *mid, struct uart_port *p)
 
 	mid->dma_dev = pdev;
 
-	p->handle_irq = dnv_handle_irq;
+	p->ops2->handle_irq = dnv_handle_irq;
 	return 0;
 }
 
@@ -310,7 +310,7 @@ static int mid8250_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	uart.port.iotype = UPIO_MEM;
 	uart.port.uartclk = mid->board->base_baud * 16;
 	uart.port.flags = UPF_SHARE_IRQ | UPF_FIXED_PORT | UPF_FIXED_TYPE;
-	uart.port.set_termios = mid8250_set_termios;
+	uart.port.ops2->set_termios = mid8250_set_termios;
 
 	uart.port.mapbase = pci_resource_start(pdev, mid->board->bar);
 	uart.port.membase = pcim_iomap(pdev, mid->board->bar, 0);

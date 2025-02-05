@@ -1433,7 +1433,7 @@ static int uart_rs485_config(struct uart_port *port)
 	uart_set_rs485_rx_during_tx(port, rs485);
 
 	scoped_guard(uart_port_lock_irqsave, port)
-		ret = port->rs485_config(port, NULL, rs485);
+		ret = port->ops2->rs485_config(port, NULL, rs485);
 	if (ret) {
 		memset(rs485, 0, sizeof(*rs485));
 		/* unset GPIOs */
@@ -1478,7 +1478,7 @@ static int uart_set_rs485_config(struct tty_struct *tty, struct uart_port *port,
 	uart_set_rs485_rx_during_tx(port, &rs485);
 
 	scoped_guard(uart_port_lock_irqsave, port) {
-		ret = port->rs485_config(port, &tty->termios, &rs485);
+		ret = port->ops2->rs485_config(port, &tty->termios, &rs485);
 		if (!ret) {
 			port->rs485 = rs485;
 
@@ -1507,7 +1507,7 @@ static int uart_get_iso7816_config(struct uart_port *port,
 {
 	struct serial_iso7816 aux;
 
-	if (!port->iso7816_config)
+	if (!port->ops2->iso7816_config)
 		return -ENOTTY;
 
 	scoped_guard(uart_port_lock_irqsave, port)
@@ -1525,7 +1525,7 @@ static int uart_set_iso7816_config(struct uart_port *port,
 	struct serial_iso7816 iso7816;
 	int i;
 
-	if (!port->iso7816_config)
+	if (!port->ops2->iso7816_config)
 		return -ENOTTY;
 
 	if (copy_from_user(&iso7816, iso7816_user, sizeof(*iso7816_user)))
@@ -1540,7 +1540,7 @@ static int uart_set_iso7816_config(struct uart_port *port,
 			return -EINVAL;
 
 	scoped_guard(uart_port_lock_irqsave, port) {
-		int ret = port->iso7816_config(port, &iso7816);
+		int ret = port->ops2->iso7816_config(port, &iso7816);
 		if (ret)
 			return ret;
 	}

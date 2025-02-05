@@ -356,7 +356,7 @@ static void fintek_8250_set_termios_handler(struct uart_8250_port *uart)
 	case CHIP_ID_F81216H:
 	case CHIP_ID_F81966:
 	case CHIP_ID_F81866:
-		uart->port.set_termios = fintek_8250_set_termios;
+		uart->port.ops2->set_termios = fintek_8250_set_termios;
 		break;
 
 	default:
@@ -438,7 +438,7 @@ static void fintek_8250_set_rs485_handler(struct uart_8250_port *uart)
 	case CHIP_ID_F81966:
 	case CHIP_ID_F81866:
 	case CHIP_ID_F81865:
-		uart->port.rs485_config = fintek_8250_rs485_config;
+		uart->port.ops2->rs485_config = fintek_8250_rs485_config;
 		if (!pdata->index)
 			uart->port.rs485_supported = fintek_8250_rs485_supported_port0;
 		else
@@ -446,7 +446,7 @@ static void fintek_8250_set_rs485_handler(struct uart_8250_port *uart)
 		break;
 
 	case CHIP_ID_F81216E: /* F81216E does not support RS485 delays */
-		uart->port.rs485_config = fintek_8250_rs485_config;
+		uart->port.ops2->rs485_config = fintek_8250_rs485_config;
 		uart->port.rs485_supported = fintek_8250_rs485_supported;
 		break;
 
