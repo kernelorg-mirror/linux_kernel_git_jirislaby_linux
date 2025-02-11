@@ -166,7 +166,7 @@ static void release_tty(struct tty_struct *tty, int idx);
  *
  * Locking: none. Must be called after tty is definitely unused
  */
-static void free_tty_struct(struct tty_struct *tty)
+void free_tty_struct(struct tty_struct *tty)
 {
 	tty_ldisc_deinit(tty);
 	put_device(tty->dev);
