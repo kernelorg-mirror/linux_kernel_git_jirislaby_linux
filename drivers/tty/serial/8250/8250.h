@@ -188,12 +188,12 @@ void serial8250_clear_and_reinit_fifos(struct uart_8250_port *p);
 
 static inline u32 serial_dl_read(struct uart_8250_port *up)
 {
-	return up->dl_read(up);
+	return up->ops->dl_read(up);
 }
 
 static inline void serial_dl_write(struct uart_8250_port *up, u32 value)
 {
-	up->dl_write(up, value);
+	up->ops->dl_write(up, value);
 }
 
 static inline bool serial8250_set_THRI(struct uart_8250_port *up)

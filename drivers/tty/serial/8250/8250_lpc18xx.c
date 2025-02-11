@@ -49,7 +49,7 @@ static int lpc18xx_rs485_config(struct uart_port *port, struct ktermios *termios
 	}
 
 	if (rs485->delay_rts_after_send) {
-		baud_clk = port->uartclk / up->dl_read(up);
+		baud_clk = port->uartclk / up->ops->dl_read(up);
 		rs485_dly_reg = DIV_ROUND_UP(rs485->delay_rts_after_send
 						* baud_clk, MSEC_PER_SEC);
 

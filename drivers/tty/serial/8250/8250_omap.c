@@ -1478,8 +1478,8 @@ static int omap8250_probe(struct platform_device *pdev)
 	up.port.rs485_config = omap8250_rs485_config;
 	/* same rs485_supported for software emulation and native RS485 */
 	up.port.rs485_supported = serial8250_em485_supported;
-	up.rs485_start_tx = serial8250_em485_start_tx;
-	up.rs485_stop_tx = serial8250_em485_stop_tx;
+	up.ops->rs485_start_tx = serial8250_em485_start_tx;
+	up.ops->rs485_stop_tx = serial8250_em485_stop_tx;
 	up.port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_8250_CONSOLE);
 
 	ret = uart_read_port_properties(&up.port);

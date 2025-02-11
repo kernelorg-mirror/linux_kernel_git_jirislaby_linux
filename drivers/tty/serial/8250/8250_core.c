@@ -307,7 +307,7 @@ static void univ8250_release_irq(struct uart_8250_port *up)
 const struct uart_ops *univ8250_port_base_ops = NULL;
 struct uart_ops univ8250_port_ops;
 
-static const struct uart_8250_ops univ8250_driver_ops = {
+static struct uart_8250_ops univ8250_driver_ops = {
 	.setup_irq	= univ8250_setup_irq,
 	.release_irq	= univ8250_release_irq,
 	.setup_timer	= univ8250_setup_timer,
@@ -742,8 +742,8 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
 		uart->port.rs485_config	= up->port.rs485_config;
 		uart->port.rs485_supported = up->port.rs485_supported;
 		uart->port.rs485	= up->port.rs485;
-		uart->rs485_start_tx	= up->rs485_start_tx;
-		uart->rs485_stop_tx	= up->rs485_stop_tx;
+		uart->ops->rs485_start_tx	= up->ops->rs485_start_tx;
+		uart->ops->rs485_stop_tx	= up->ops->rs485_stop_tx;
 		uart->lsr_save_mask	= up->lsr_save_mask;
 		uart->dma		= up->dma;
 
@@ -805,10 +805,10 @@ int serial8250_register_8250_port(const struct uart_8250_port *up)
 			uart->port.pm = up->port.pm;
 		if (up->port.handle_break)
 			uart->port.handle_break = up->port.handle_break;
-		if (up->dl_read)
-			uart->dl_read = up->dl_read;
-		if (up->dl_write)
-			uart->dl_write = up->dl_write;
+		if (up->ops->dl_read)
+			uart->ops->dl_read = up->ops->dl_read;
+		if (up->ops->dl_write)
+			uart->ops->dl_write = up->ops->dl_write;
 
 		if (uart->port.type != PORT_8250_CIR) {
 			if (uart_console_registered(&uart->port))

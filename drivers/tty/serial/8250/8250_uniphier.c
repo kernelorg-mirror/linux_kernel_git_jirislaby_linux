@@ -216,8 +216,8 @@ static int uniphier_uart_probe(struct platform_device *pdev)
 
 	up.port.serial_in = uniphier_serial_in;
 	up.port.serial_out = uniphier_serial_out;
-	up.dl_read = uniphier_serial_dl_read;
-	up.dl_write = uniphier_serial_dl_write;
+	up.ops->dl_read = uniphier_serial_dl_read;
+	up.ops->dl_write = uniphier_serial_dl_write;
 
 	ret = serial8250_register_8250_port(&up);
 	if (ret < 0) {

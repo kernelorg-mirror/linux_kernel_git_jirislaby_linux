@@ -188,8 +188,8 @@ static int serial8250_em_probe(struct platform_device *pdev)
 	up.port.iotype = UPIO_MEM32;
 	up.port.serial_in = serial8250_em_serial_in;
 	up.port.serial_out = serial8250_em_serial_out;
-	up.dl_read = serial8250_em_serial_dl_read;
-	up.dl_write = serial8250_em_serial_dl_write;
+	up.ops->dl_read = serial8250_em_serial_dl_read;
+	up.ops->dl_write = serial8250_em_serial_dl_write;
 
 	ret = serial8250_register_8250_port(&up);
 	if (ret < 0)

@@ -179,8 +179,10 @@ static int serial8250_probe_platform(struct platform_device *dev, struct plat_se
 		uart.bugs		= p->bugs;
 		uart.port.serial_in	= p->serial_in;
 		uart.port.serial_out	= p->serial_out;
-		uart.dl_read		= p->dl_read;
-		uart.dl_write		= p->dl_write;
+#ifdef TODO
+		uart.dl_read		= p->ops->dl_read;
+		uart.dl_write		= p->ops->dl_write;
+#endif
 		uart.port.handle_irq	= p->handle_irq;
 		uart.port.handle_break	= p->handle_break;
 		uart.port.set_termios	= p->set_termios;

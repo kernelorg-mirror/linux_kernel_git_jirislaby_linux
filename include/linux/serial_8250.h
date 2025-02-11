@@ -95,6 +95,12 @@ struct uart_8250_ops {
 	int		(*setup_irq)(struct uart_8250_port *);
 	void		(*release_irq)(struct uart_8250_port *);
 	void		(*setup_timer)(struct uart_8250_port *);
+
+	u32		(*dl_read)(struct uart_8250_port *up);
+	void		(*dl_write)(struct uart_8250_port *up, u32 value);
+
+	void		(*rs485_start_tx)(struct uart_8250_port *up, bool toggle_ier);
+	void		(*rs485_stop_tx)(struct uart_8250_port *up, bool toggle_ier);
 };
 
 struct uart_8250_em485 {
@@ -154,15 +160,9 @@ struct uart_8250_port {
 	unsigned char		msr_saved_flags;
 
 	struct uart_8250_dma	*dma;
-	const struct uart_8250_ops *ops;
-
-	/* 8250 specific callbacks */
-	u32			(*dl_read)(struct uart_8250_port *up);
-	void			(*dl_write)(struct uart_8250_port *up, u32 value);
+	struct uart_8250_ops *ops;
 
 	struct uart_8250_em485 *em485;
-	void			(*rs485_start_tx)(struct uart_8250_port *up, bool toggle_ier);
-	void			(*rs485_stop_tx)(struct uart_8250_port *up, bool toggle_ier);
 
 	/* Serial port overrun backoff */
 	struct delayed_work overrun_backoff;

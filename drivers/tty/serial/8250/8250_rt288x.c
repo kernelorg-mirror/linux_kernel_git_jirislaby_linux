@@ -87,8 +87,8 @@ int rt288x_setup(struct uart_port *p)
 
 	p->serial_in = au_serial_in;
 	p->serial_out = au_serial_out;
-	up->dl_read = au_serial_dl_read;
-	up->dl_write = au_serial_dl_write;
+	up->ops->dl_read = au_serial_dl_read;
+	up->ops->dl_write = au_serial_dl_write;
 
 	p->mapsize = 0x100;
 

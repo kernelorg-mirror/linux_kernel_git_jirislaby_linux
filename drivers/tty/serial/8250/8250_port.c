@@ -430,8 +430,8 @@ static void set_io_from_upio(struct uart_port *p)
 {
 	struct uart_8250_port *up = up_to_u8250p(p);
 
-	up->dl_read = default_serial_dl_read;
-	up->dl_write = default_serial_dl_write;
+	up->ops->dl_read = default_serial_dl_read;
+	up->ops->dl_write = default_serial_dl_write;
 
 	switch (p->iotype) {
 #ifdef CONFIG_HAS_IOPORT
@@ -577,7 +577,7 @@ static int serial8250_em485_init(struct uart_8250_port *p)
 
 deassert_rts:
 	if (p->em485->tx_stopped)
-		p->rs485_stop_tx(p, true);
+		p->ops->rs485_stop_tx(p, true);
 
 	return 0;
 }
@@ -1356,7 +1356,7 @@ static enum hrtimer_restart serial8250_em485_handle_stop_tx(struct hrtimer *t)
 	guard(uart_port_lock_irqsave)(&p->port);
 
 	if (em485->active_timer == &em485->stop_tx_timer) {
-		p->rs485_stop_tx(p, true);
+		p->ops->rs485_stop_tx(p, true);
 		em485->active_timer = NULL;
 		em485->tx_stopped = true;
 	}
@@ -1386,7 +1386,7 @@ static void __stop_tx_rs485(struct uart_8250_port *p, u64 stop_delay)
 		em485->active_timer = &em485->stop_tx_timer;
 		hrtimer_start(&em485->stop_tx_timer, ns_to_ktime(stop_delay), HRTIMER_MODE_REL);
 	} else {
-		p->rs485_stop_tx(p, true);
+		p->ops->rs485_stop_tx(p, true);
 		em485->active_timer = NULL;
 		em485->tx_stopped = true;
 	}
@@ -1520,7 +1520,7 @@ static bool start_tx_rs485(struct uart_port *port)
 	if (em485->tx_stopped) {
 		em485->tx_stopped = false;
 
-		up->rs485_start_tx(up, true);
+		up->ops->rs485_start_tx(up, true);
 
 		if (up->port.rs485.delay_rts_before_send > 0) {
 			em485->active_timer = &em485->start_tx_timer;
@@ -3320,7 +3320,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
 
 	if (em485) {
 		if (em485->tx_stopped)
-			up->rs485_start_tx(up, false);
+			up->ops->rs485_start_tx(up, false);
 		mdelay(port->rs485.delay_rts_before_send);
 	}
 
@@ -3358,7 +3358,7 @@ void serial8250_console_write(struct uart_8250_port *up, const char *s,
 	if (em485) {
 		mdelay(port->rs485.delay_rts_after_send);
 		if (em485->tx_stopped)
-			up->rs485_stop_tx(up, false);
+			up->ops->rs485_stop_tx(up, false);
 	}
 
 	serial_port_out(port, UART_IER, ier);
