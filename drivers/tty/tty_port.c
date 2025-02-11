@@ -114,12 +114,14 @@ EXPORT_SYMBOL(tty_port_init);
  * tty_port_install() is used in the driver. If used, this has to be called
  * before tty_register_driver().
  */
-static void tty_port_link_device(struct tty_port *port,
-				 struct tty_driver *driver, unsigned index)
+static int tty_port_link_device(struct tty_port *port,
+				struct tty_driver *driver, unsigned index)
 {
 	if (WARN_ON(index >= driver->num))
-		return;
+		return -EINVAL;
 	driver->ports[index] = port;
+
+	return 0;
 }
 
 /**
@@ -159,7 +161,10 @@ struct device *tty_port_register_device_attr(struct tty_port *port,
 		struct device *device, void *drvdata,
 		const struct attribute_group **attr_grp)
 {
-	tty_port_link_device(port, driver, index);
+	int ret = tty_port_link_device(port, driver, index);
+	if (ret)
+		return ERR_PTR(ret);
+
 	return tty_register_device_attr(driver, index, device, drvdata,
 			attr_grp);
 }
@@ -184,8 +189,11 @@ struct device *tty_port_register_device_attr_serdev(struct tty_port *port,
 		const struct attribute_group **attr_grp)
 {
 	struct device *dev;
+	int ret;
 
-	tty_port_link_device(port, driver, index);
+	ret = tty_port_link_device(port, driver, index);
+	if (ret)
+		return ERR_PTR(ret);
 
 	dev = serdev_tty_port_register(port, host, parent, driver, index);
 	if (PTR_ERR(dev) != -ENODEV) {
