@@ -1416,7 +1416,7 @@ struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx)
 		goto err_free_tty;
 
 	if (!tty->port)
-		tty->port = driver->ports[idx];
+		tty->port = xa_load(&driver->ports, idx);
 
 	if (WARN_RATELIMIT(!tty->port,
 			"%s: %s driver does not set tty->port. This would crash the kernel. Fix the driver!\n",
@@ -3355,17 +3355,12 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 	kref_init(&driver->kref);
 	xa_init(&driver->ttys);
 	xa_init(&driver->termios);
+	xa_init(&driver->ports);
 	driver->num = lines;
 	driver->owner = owner;
 	driver->flags = flags;
 
 	if (!(flags & TTY_DRIVER_DYNAMIC_ALLOC)) {
-		driver->ports = kcalloc(lines, sizeof(*driver->ports),
-				GFP_KERNEL);
-		if (!driver->ports) {
-			err = -ENOMEM;
-			goto err_free_all;
-		}
 		cdevs = lines;
 	}
 
@@ -3377,7 +3372,6 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 
 	return driver;
 err_free_all:
-	kfree(driver->ports);
 	kfree(driver->cdevs);
 	kfree(driver);
 	return ERR_PTR(err);
@@ -3400,9 +3394,9 @@ static void destruct_tty_driver(struct kref *kref)
 			cdev_del(driver->cdevs[0]);
 	}
 	kfree(driver->cdevs);
-	kfree(driver->ports);
 	xa_destroy(&driver->ttys);
 	xa_destroy(&driver->termios);
+	xa_destroy(&driver->ports);
 	kfree(driver);
 }
 

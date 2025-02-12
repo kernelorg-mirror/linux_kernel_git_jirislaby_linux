@@ -119,9 +119,8 @@ static int tty_port_link_device(struct tty_port *port,
 {
 	if (WARN_ON(index >= driver->num))
 		return -EINVAL;
-	driver->ports[index] = port;
 
-	return 0;
+	return xa_err(xa_store(&driver->ports, index, port, GFP_KERNEL));
 }
 
 /**

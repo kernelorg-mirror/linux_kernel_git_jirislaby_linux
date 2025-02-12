@@ -546,7 +546,7 @@ struct tty_driver {
 	 */
 	struct xarray ttys;
 	struct xarray termios;
-	struct tty_port **ports;
+	struct xarray ports;
 	void *driver_state;
 
 	/*
