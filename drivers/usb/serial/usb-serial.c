@@ -227,7 +227,7 @@ static int serial_install(struct tty_driver *driver, struct tty_struct *tty)
 	if (!try_module_get(serial->type->driver.owner))
 		goto err_put_serial;
 
-	init_termios = (driver->termios[idx] == NULL);
+	init_termios = xa_load(&driver->termios, idx) == NULL;
 
 	retval = tty_standard_install(driver, tty);
 	if (retval)

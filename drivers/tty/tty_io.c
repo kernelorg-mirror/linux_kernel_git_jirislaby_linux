@@ -1247,7 +1247,7 @@ void tty_init_termios(struct tty_struct *tty)
 		tty->termios = tty->driver->init_termios;
 	else {
 		/* Check for lazy saved data */
-		tp = tty->driver->termios[idx];
+		tp = xa_load(&tty->driver->termios, idx);
 		if (tp != NULL) {
 			tty->termios = *tp;
 			tty->termios.c_line  = tty->driver->init_termios.c_line;
@@ -1476,12 +1476,16 @@ void tty_save_termios(struct tty_struct *tty)
 		return;
 
 	/* Stash the termios data */
-	tp = tty->driver->termios[idx];
+	tp = xa_load(&tty->driver->termios, idx);
 	if (tp == NULL) {
 		tp = kmalloc(sizeof(*tp), GFP_KERNEL);
 		if (tp == NULL)
 			return;
-		tty->driver->termios[idx] = tp;
+		if (xa_is_err(xa_store(&tty->driver->termios, idx, tp,
+				       GFP_KERNEL))) {
+			kfree(tp);
+			return;
+		}
 	}
 	*tp = tty->termios;
 }
@@ -3245,7 +3249,6 @@ struct device *tty_register_device_attr(struct tty_driver *driver,
 {
 	char name[64];
 	dev_t devt = MKDEV(driver->major, driver->minor_start) + index;
-	struct ktermios *tp;
 	struct device *dev;
 	int retval;
 
@@ -3283,11 +3286,7 @@ struct device *tty_register_device_attr(struct tty_driver *driver,
 		 * Free any saved termios data so that the termios state is
 		 * reset when reusing a minor number.
 		 */
-		tp = driver->termios[index];
-		if (tp) {
-			driver->termios[index] = NULL;
-			kfree(tp);
-		}
+		kfree(xa_erase(&driver->termios, index));
 
 		retval = tty_cdev_add(driver, devt, index, 1);
 		if (retval)
@@ -3355,18 +3354,10 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 
 	kref_init(&driver->kref);
 	xa_init(&driver->ttys);
+	xa_init(&driver->termios);
 	driver->num = lines;
 	driver->owner = owner;
 	driver->flags = flags;
-
-	if (!(flags & TTY_DRIVER_DEVPTS_MEM)) {
-		driver->termios = kcalloc(lines, sizeof(*driver->termios),
-				GFP_KERNEL);
-		if (!driver->termios) {
-			err = -ENOMEM;
-			goto err_free_all;
-		}
-	}
 
 	if (!(flags & TTY_DRIVER_DYNAMIC_ALLOC)) {
 		driver->ports = kcalloc(lines, sizeof(*driver->ports),
@@ -3387,7 +3378,6 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 	return driver;
 err_free_all:
 	kfree(driver->ports);
-	kfree(driver->termios);
 	kfree(driver->cdevs);
 	kfree(driver);
 	return ERR_PTR(err);
@@ -3398,15 +3388,10 @@ static void destruct_tty_driver(struct kref *kref)
 {
 	struct tty_driver *driver = container_of(kref, struct tty_driver, kref);
 	int i;
-	struct ktermios *tp;
 
 	if (driver->flags & TTY_DRIVER_INSTALLED) {
 		for (i = 0; i < driver->num; i++) {
-			tp = driver->termios[i];
-			if (tp) {
-				driver->termios[i] = NULL;
-				kfree(tp);
-			}
+			kfree(xa_erase(&driver->termios, i));
 			if (!(driver->flags & TTY_DRIVER_DYNAMIC_DEV))
 				tty_unregister_device(driver, i);
 		}
@@ -3416,8 +3401,8 @@ static void destruct_tty_driver(struct kref *kref)
 	}
 	kfree(driver->cdevs);
 	kfree(driver->ports);
-	kfree(driver->termios);
 	xa_destroy(&driver->ttys);
+	xa_destroy(&driver->termios);
 	kfree(driver);
 }
 

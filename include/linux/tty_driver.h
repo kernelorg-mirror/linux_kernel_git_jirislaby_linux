@@ -545,8 +545,8 @@ struct tty_driver {
 	 * Pointer to the tty data structures
 	 */
 	struct xarray ttys;
+	struct xarray termios;
 	struct tty_port **ports;
-	struct ktermios **termios;
 	void *driver_state;
 
 	/*
