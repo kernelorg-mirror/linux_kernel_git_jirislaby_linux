@@ -389,8 +389,12 @@ static int pty_common_install(struct tty_driver *driver, struct tty_struct *tty,
 		tty_init_termios(tty);
 		tty_init_termios(o_tty);
 
-		driver->other->ttys[idx] = o_tty;
-		driver->ttys[idx] = tty;
+		retval = xa_err(xa_store(&driver->other->ttys, idx, o_tty, GFP_KERNEL));
+		if (retval)
+			goto err_erase_idx;
+		retval = xa_err(xa_store(&driver->ttys, idx, tty, GFP_KERNEL));
+		if (retval)
+			goto err_erase_idx;
 	} else {
 		memset(&tty->termios_locked, 0, sizeof(tty->termios_locked));
 		tty->termios = driver->init_termios;
@@ -420,6 +424,10 @@ static int pty_common_install(struct tty_driver *driver, struct tty_struct *tty,
 	o_tty->count++;
 	return 0;
 
+err_erase_idx:
+	xa_erase(&driver->other->ttys, idx);
+	xa_erase(&driver->ttys, idx);
+	free_tty_struct(o_tty);
 err_put_module:
 	module_put(driver->other->owner);
 err:
@@ -445,9 +453,9 @@ static void pty_remove(struct tty_driver *driver, struct tty_struct *tty)
 {
 	struct tty_struct *pair = tty->link;
 
-	driver->ttys[tty->index] = NULL;
+	xa_erase(&driver->ttys, tty->index);
 	if (pair)
-		pair->driver->ttys[pair->index] = NULL;
+		xa_erase(&pair->driver->ttys, pair->index);
 }
 
 static int pty_bsd_ioctl(struct tty_struct *tty,

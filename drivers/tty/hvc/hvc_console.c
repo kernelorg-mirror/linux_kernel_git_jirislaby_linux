@@ -860,7 +860,7 @@ static int hvc_poll_init(struct tty_driver *driver, int line, char *options)
 
 static int hvc_poll_get_char(struct tty_driver *driver, int line)
 {
-	struct tty_struct *tty = driver->ttys[0];
+	struct tty_struct *tty = xa_load(&driver->ttys, 0);
 	struct hvc_struct *hp = tty->driver_data;
 	int n;
 	char ch;
@@ -875,7 +875,7 @@ static int hvc_poll_get_char(struct tty_driver *driver, int line)
 
 static void hvc_poll_put_char(struct tty_driver *driver, int line, char ch)
 {
-	struct tty_struct *tty = driver->ttys[0];
+	struct tty_struct *tty = xa_load(&driver->ttys, 0);
 	struct hvc_struct *hp = tty->driver_data;
 	int n;
 

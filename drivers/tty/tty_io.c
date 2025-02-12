@@ -1224,7 +1224,7 @@ static struct tty_struct *tty_driver_lookup_tty(struct tty_driver *driver,
 	} else {
 		if (idx >= driver->num)
 			return ERR_PTR(-EINVAL);
-		tty = driver->ttys[idx];
+		tty = xa_load(&driver->ttys, idx);
 	}
 	if (!IS_ERR(tty))
 		tty_kref_get(tty);
@@ -1270,10 +1270,17 @@ EXPORT_SYMBOL_GPL(tty_init_termios);
  */
 int tty_standard_install(struct tty_driver *driver, struct tty_struct *tty)
 {
+	int ret;
+
 	tty_init_termios(tty);
+
+	ret = xa_err(xa_store(&driver->ttys, tty->index, tty, GFP_KERNEL));
+	if (ret)
+		return ret;
+
 	tty_driver_kref_get(driver);
 	tty->count++;
-	driver->ttys[tty->index] = tty;
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(tty_standard_install);
@@ -1311,7 +1318,7 @@ static void tty_driver_remove_tty(struct tty_driver *driver, struct tty_struct *
 	if (driver->ops->remove)
 		driver->ops->remove(driver, tty);
 	else
-		driver->ttys[tty->index] = NULL;
+		xa_erase(&driver->ttys, tty->index);
 }
 
 /**
@@ -1604,6 +1611,8 @@ static void release_tty(struct tty_struct *tty, int idx)
 static int tty_release_checks(struct tty_struct *tty, int idx)
 {
 #ifdef TTY_PARANOIA_CHECK
+	struct tty_struct *tty2;
+
 	if (idx < 0 || idx >= tty->driver->num) {
 		tty_debug(tty, "bad idx %d\n", idx);
 		return -1;
@@ -1613,17 +1622,17 @@ static int tty_release_checks(struct tty_struct *tty, int idx)
 	if (tty->driver->flags & TTY_DRIVER_DEVPTS_MEM)
 		return 0;
 
-	if (tty != tty->driver->ttys[idx]) {
-		tty_debug(tty, "bad driver table[%d] = %p\n",
-			  idx, tty->driver->ttys[idx]);
+	tty2 = xa_load(&tty->driver->ttys, idx);
+	if (tty != tty2) {
+		tty_debug(tty, "bad driver table[%d] = %p\n", idx, tty2);
 		return -1;
 	}
 	if (tty->driver->other) {
 		struct tty_struct *o_tty = tty->link;
 
-		if (o_tty != tty->driver->other->ttys[idx]) {
-			tty_debug(tty, "bad other table[%d] = %p\n",
-				  idx, tty->driver->other->ttys[idx]);
+		tty2 = xa_load(&tty->driver->other->ttys, idx);
+		if (o_tty != tty2) {
+			tty_debug(tty, "bad other table[%d] = %p\n", idx, tty2);
 			return -1;
 		}
 		if (o_tty->link != tty) {
@@ -3345,16 +3354,15 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 		return ERR_PTR(-ENOMEM);
 
 	kref_init(&driver->kref);
+	xa_init(&driver->ttys);
 	driver->num = lines;
 	driver->owner = owner;
 	driver->flags = flags;
 
 	if (!(flags & TTY_DRIVER_DEVPTS_MEM)) {
-		driver->ttys = kcalloc(lines, sizeof(*driver->ttys),
-				GFP_KERNEL);
 		driver->termios = kcalloc(lines, sizeof(*driver->termios),
 				GFP_KERNEL);
-		if (!driver->ttys || !driver->termios) {
+		if (!driver->termios) {
 			err = -ENOMEM;
 			goto err_free_all;
 		}
@@ -3379,7 +3387,6 @@ struct tty_driver *__tty_alloc_driver(unsigned int lines, struct module *owner,
 	return driver;
 err_free_all:
 	kfree(driver->ports);
-	kfree(driver->ttys);
 	kfree(driver->termios);
 	kfree(driver->cdevs);
 	kfree(driver);
@@ -3410,7 +3417,7 @@ static void destruct_tty_driver(struct kref *kref)
 	kfree(driver->cdevs);
 	kfree(driver->ports);
 	kfree(driver->termios);
-	kfree(driver->ttys);
+	xa_destroy(&driver->ttys);
 	kfree(driver);
 }
 

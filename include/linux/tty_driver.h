@@ -10,6 +10,7 @@
 #include <linux/uaccess.h>
 #include <linux/termios.h>
 #include <linux/seq_file.h>
+#include <linux/xarray.h>
 
 struct tty_struct;
 struct tty_driver;
@@ -543,7 +544,7 @@ struct tty_driver {
 	/*
 	 * Pointer to the tty data structures
 	 */
-	struct tty_struct **ttys;
+	struct xarray ttys;
 	struct tty_port **ports;
 	struct ktermios **termios;
 	void *driver_state;
