@@ -1040,7 +1040,8 @@ static int __init hvsi_init(void)
 	struct tty_driver *driver;
 	int i, ret;
 
-	driver = tty_alloc_driver(hvsi_count, TTY_DRIVER_REAL_RAW);
+	driver = tty_alloc_driver(hvsi_count, TTY_DRIVER_DYNAMIC_DEV |
+				  TTY_DRIVER_REAL_RAW);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -1055,37 +1056,39 @@ static int __init hvsi_init(void)
 	driver->init_termios.c_ospeed = 9600;
 	tty_set_operations(driver, &hvsi_ops);
 
-	for (i=0; i < hvsi_count; i++) {
-		struct hvsi_struct *hp = &hvsi_ports[i];
-		int ret = 1;
-
-		tty_port_link_device(&hp->port, driver, i);
-
-		ret = request_irq(hp->virq, hvsi_interrupt, 0, "hvsi", hp);
-		if (ret)
-			printk(KERN_ERR "HVSI: couldn't reserve irq 0x%x (error %i)\n",
-				hp->virq, ret);
-	}
-	hvsi_wait = wait_for_state; /* irqs active now */
-
 	ret = tty_register_driver(driver);
 	if (ret) {
 		pr_err("Couldn't register hvsi console driver\n");
-		goto err_free_irq;
+		goto err_free_drv;
 	}
+
+	for (i=0; i < hvsi_count; i++) {
+		struct hvsi_struct *hp = &hvsi_ports[i];
+		int ret;
+
+		ret = PTR_ERR_OR_ZERO(tty_port_register_device(&hp->port,
+							       driver, i,
+							       NULL));
+		if (ret) {
+			pr_err("Couldn't register tty port\n");
+			continue;
+		}
+
+		ret = request_irq(hp->virq, hvsi_interrupt, 0, "hvsi", hp);
+		if (ret) {
+			printk(KERN_ERR "HVSI: couldn't reserve irq 0x%x (error %i)\n",
+				hp->virq, ret);
+			tty_port_unregister_device(&hp->port, driver, i);
+		}
+	}
+	hvsi_wait = wait_for_state; /* irqs active now */
 
 	hvsi_driver = driver;
 
 	printk(KERN_DEBUG "HVSI: registered %i devices\n", hvsi_count);
 
 	return 0;
-err_free_irq:
-	hvsi_wait = poll_for_state;
-	for (i = 0; i < hvsi_count; i++) {
-		struct hvsi_struct *hp = &hvsi_ports[i];
-
-		free_irq(hp->virq, hp);
-	}
+err_free_drv:
 	tty_driver_kref_put(driver);
 
 	return ret;

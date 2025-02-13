@@ -106,7 +106,8 @@ static int __init rs_init(void)
 	struct tty_driver *driver;
 	int ret;
 
-	driver = tty_alloc_driver(SERIAL_MAX_NUM_LINES, TTY_DRIVER_REAL_RAW);
+	driver = tty_alloc_driver(SERIAL_MAX_NUM_LINES, TTY_DRIVER_REAL_RAW |
+				  TTY_DRIVER_DYNAMIC_DEV);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -125,25 +126,36 @@ static int __init rs_init(void)
 		B9600 | CS8 | CREAD | HUPCL | CLOCAL;
 
 	tty_set_operations(driver, &serial_ops);
-	tty_port_link_device(&serial_port, driver, 0);
 
 	ret = tty_register_driver(driver);
 	if (ret) {
 		pr_err("Couldn't register serial driver\n");
-		tty_driver_kref_put(driver);
-		tty_port_destroy(&serial_port);
+		goto err_free_drv;
+	}
 
-		return ret;
+	ret = PTR_ERR_OR_ZERO(tty_port_register_device(&serial_port, driver, 0,
+						       NULL));
+	if (ret) {
+		pr_err("failed to register rs tty port\n");
+		goto err_unreg_drv;
 	}
 
 	serial_driver = driver;
 
 	return 0;
+err_unreg_drv:
+	tty_unregister_driver(serial_driver);
+err_free_drv:
+	tty_driver_kref_put(driver);
+	tty_port_destroy(&serial_port);
+
+	return ret;
 }
 
 
 static __exit void rs_exit(void)
 {
+	tty_port_unregister_device(&serial_port, serial_driver, 0);
 	tty_unregister_driver(serial_driver);
 	tty_driver_kref_put(serial_driver);
 	tty_port_destroy(&serial_port);

@@ -181,7 +181,7 @@ static int __init ttyprintk_init(void)
 
 	spin_lock_init(&tpk_port.spinlock);
 
-	ttyprintk_driver = tty_alloc_driver(1,
+	ttyprintk_driver = tty_alloc_driver(1, TTY_DRIVER_DYNAMIC_DEV |
 			TTY_DRIVER_RESET_TERMIOS |
 			TTY_DRIVER_REAL_RAW |
 			TTY_DRIVER_UNNUMBERED_NODE);
@@ -199,7 +199,6 @@ static int __init ttyprintk_init(void)
 	ttyprintk_driver->init_termios = tty_std_termios;
 	ttyprintk_driver->init_termios.c_oflag = OPOST | OCRNL | ONOCR | ONLRET;
 	tty_set_operations(ttyprintk_driver, &ttyprintk_ops);
-	tty_port_link_device(&tpk_port.port, ttyprintk_driver, 0);
 
 	ret = tty_register_driver(ttyprintk_driver);
 	if (ret < 0) {
@@ -207,10 +206,19 @@ static int __init ttyprintk_init(void)
 		goto error;
 	}
 
+	ret = PTR_ERR_OR_ZERO(tty_port_register_device(&tpk_port.port,
+						       ttyprintk_driver, 0,
+						       NULL));
+	if (ret) {
+		pr_err("Couldn't register tty port\n");
+		goto err_unreg_drv;
+	}
+
 	register_console(&ttyprintk_console);
 
 	return 0;
-
+err_unreg_drv:
+	tty_unregister_driver(ttyprintk_driver);
 error:
 	tty_driver_kref_put(ttyprintk_driver);
 	tty_port_destroy(&tpk_port.port);
@@ -220,6 +228,7 @@ error:
 static void __exit ttyprintk_exit(void)
 {
 	unregister_console(&ttyprintk_console);
+	tty_port_unregister_device(&tpk_port.port, ttyprintk_driver, 0);
 	tty_unregister_driver(ttyprintk_driver);
 	tty_driver_kref_put(ttyprintk_driver);
 	tty_port_destroy(&tpk_port.port);

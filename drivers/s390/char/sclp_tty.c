@@ -514,7 +514,9 @@ sclp_tty_init(void)
 		return 0;
 	if (!sclp.has_linemode)
 		return 0;
-	driver = tty_alloc_driver(1, TTY_DRIVER_REAL_RAW);
+
+	driver = tty_alloc_driver(1, TTY_DRIVER_DYNAMIC_DEV |
+				  TTY_DRIVER_REAL_RAW);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -561,14 +563,24 @@ sclp_tty_init(void)
 	driver->init_termios.c_oflag = ONLCR;
 	driver->init_termios.c_lflag = ISIG | ECHO;
 	tty_set_operations(driver, &sclp_ops);
-	tty_port_link_device(&sclp_port, driver, 0);
+
 	rc = tty_register_driver(driver);
-	if (rc) {
-		tty_driver_kref_put(driver);
-		tty_port_destroy(&sclp_port);
-		return rc;
-	}
+	if (rc)
+		goto err_free_drv;
+
+	rc = PTR_ERR_OR_ZERO(tty_port_register_device(&sclp_port, driver, 0,
+						      NULL));
+	if (rc)
+		goto err_unreg_drv;
+
 	sclp_tty_driver = driver;
+
 	return 0;
+err_unreg_drv:
+	tty_unregister_driver(driver);
+err_free_drv:
+	tty_driver_kref_put(driver);
+	tty_port_destroy(&sclp_port);
+	return rc;
 }
 device_initcall(sclp_tty_init);

@@ -64,7 +64,7 @@ static int __init ttynull_init(void)
 	struct tty_driver *driver;
 	int ret;
 
-	driver = tty_alloc_driver(1,
+	driver = tty_alloc_driver(1, TTY_DRIVER_DYNAMIC_DEV |
 		TTY_DRIVER_RESET_TERMIOS |
 		TTY_DRIVER_REAL_RAW |
 		TTY_DRIVER_UNNUMBERED_NODE);
@@ -80,24 +80,33 @@ static int __init ttynull_init(void)
 	driver->init_termios = tty_std_termios;
 	driver->init_termios.c_oflag = OPOST | OCRNL | ONOCR | ONLRET;
 	tty_set_operations(driver, &ttynull_ops);
-	tty_port_link_device(&ttynull_port, driver, 0);
 
 	ret = tty_register_driver(driver);
-	if (ret < 0) {
-		tty_driver_kref_put(driver);
-		tty_port_destroy(&ttynull_port);
-		return ret;
-	}
+	if (ret < 0)
+		goto err_free_drv;
+
+	ret = PTR_ERR_OR_ZERO(tty_port_register_device(&ttynull_port, driver, 0,
+						       NULL));
+	if (ret)
+		goto err_unreg_drv;
 
 	ttynull_driver = driver;
 	register_console(&ttynull_console);
 
 	return 0;
+err_unreg_drv:
+	tty_unregister_driver(driver);
+err_free_drv:
+	tty_driver_kref_put(driver);
+	tty_port_destroy(&ttynull_port);
+
+	return ret;
 }
 
 static void __exit ttynull_exit(void)
 {
 	unregister_console(&ttynull_console);
+	tty_port_unregister_device(&ttynull_port, ttynull_driver, 0);
 	tty_unregister_driver(ttynull_driver);
 	tty_driver_kref_put(ttynull_driver);
 	tty_port_destroy(&ttynull_port);

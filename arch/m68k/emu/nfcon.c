@@ -132,7 +132,8 @@ static int __init nfcon_init(void)
 	if (!stderr_id)
 		return -ENODEV;
 
-	driver = tty_alloc_driver(1, TTY_DRIVER_REAL_RAW);
+	driver = tty_alloc_driver(1, TTY_DRIVER_DYNAMIC_DEV |
+				  TTY_DRIVER_REAL_RAW);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -145,13 +146,18 @@ static int __init nfcon_init(void)
 	driver->init_termios = tty_std_termios;
 
 	tty_set_operations(driver, &nfcon_tty_ops);
-	tty_port_link_device(&nfcon_tty_port, driver, 0);
+
 	res = tty_register_driver(driver);
 	if (res) {
 		pr_err("failed to register nfcon tty driver\n");
-		tty_driver_kref_put(driver);
-		tty_port_destroy(&nfcon_tty_port);
-		return res;
+		goto err_free_drv;
+	}
+
+	res = PTR_ERR_OR_ZERO(tty_port_register_device(&nfcon_tty_port, driver,
+						       0, NULL));
+	if (res) {
+		pr_err("Couldn't register tty port\n");
+		goto err_unreg_drv;
 	}
 
 	nfcon_tty_driver = driver;
@@ -160,11 +166,19 @@ static int __init nfcon_init(void)
 		register_console(&nf_console);
 
 	return 0;
+err_unreg_drv:
+	tty_unregister_driver(driver);
+err_free_drv:
+	tty_driver_kref_put(driver);
+	tty_port_destroy(&nfcon_tty_port);
+
+	return res;
 }
 
 static void __exit nfcon_exit(void)
 {
 	unregister_console(&nf_console);
+	tty_port_unregister_device(&nfcon_tty_port, nfcon_tty_driver, 0);
 	tty_unregister_driver(nfcon_tty_driver);
 	tty_driver_kref_put(nfcon_tty_driver);
 	tty_port_destroy(&nfcon_tty_port);

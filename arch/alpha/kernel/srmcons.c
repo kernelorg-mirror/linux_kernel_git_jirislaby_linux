@@ -204,7 +204,8 @@ srmcons_init(void)
 	if (!srm_is_registered_console)
 		return -ENODEV;
 
-	driver = tty_alloc_driver(MAX_SRM_CONSOLE_DEVICES, 0);
+	driver = tty_alloc_driver(MAX_SRM_CONSOLE_DEVICES,
+				  TTY_DRIVER_DYNAMIC_DEV);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -218,14 +219,21 @@ srmcons_init(void)
 	driver->subtype = SYSTEM_TYPE_SYSCONS;
 	driver->init_termios = tty_std_termios;
 	tty_set_operations(driver, &srmcons_ops);
-	tty_port_link_device(&srmcons_singleton.port, driver, 0);
+
 	err = tty_register_driver(driver);
 	if (err)
 		goto err_free_drv;
 
+	err = PTR_ERR_OR_ZERO(tty_port_register_device(&srmcons_singleton.port,
+						       driver, 0, NULL));
+	if (err)
+		goto err_unreg_drv;
+
 	srmcons_driver = driver;
 
 	return 0;
+err_unreg_drv:
+	tty_unregister_driver(driver);
 err_free_drv:
 	tty_driver_kref_put(driver);
 	tty_port_destroy(&srmcons_singleton.port);

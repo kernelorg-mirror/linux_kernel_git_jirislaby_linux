@@ -1488,7 +1488,8 @@ static int __init amiga_serial_probe(struct platform_device *pdev)
 	unsigned long flags;
 	int error;
 
-	driver = tty_alloc_driver(1, TTY_DRIVER_REAL_RAW);
+	driver = tty_alloc_driver(1, TTY_DRIVER_DYNAMIC_DEV |
+				  TTY_DRIVER_REAL_RAW);
 	if (IS_ERR(driver))
 		return PTR_ERR(driver);
 
@@ -1509,11 +1510,15 @@ static int __init amiga_serial_probe(struct platform_device *pdev)
 	state->port = (int)&amiga_custom.serdatr; /* Just to give it a value */
 	tty_port_init(&state->tport);
 	state->tport.ops = &amiga_port_ops;
-	tty_port_link_device(&state->tport, driver, 0);
 
 	error = tty_register_driver(driver);
 	if (error)
 		goto fail_tty_driver_kref_put;
+
+	error = PTR_ERR_OR_ZERO(tty_port_register_device(&state->tport, driver,
+							 0, NULL));
+	if (error)
+		goto fail_unregister;
 
 	printk(KERN_INFO "ttyS0 is the amiga builtin serial port\n");
 
@@ -1524,7 +1529,7 @@ static int __init amiga_serial_probe(struct platform_device *pdev)
 	/* set ISRs, and then disable the rx interrupts */
 	error = request_irq(IRQ_AMIGA_TBE, ser_tx_int, 0, "serial TX", state);
 	if (error)
-		goto fail_unregister;
+		goto fail_unregister_dev;
 
 	error = request_irq(IRQ_AMIGA_RBF, ser_rx_int, 0,
 			    "serial RX", state);
@@ -1558,6 +1563,8 @@ static int __init amiga_serial_probe(struct platform_device *pdev)
 
 fail_free_irq:
 	free_irq(IRQ_AMIGA_TBE, state);
+fail_unregister_dev:
+	tty_port_unregister_device(&state->tport, driver, 0);
 fail_unregister:
 	tty_unregister_driver(driver);
 fail_tty_driver_kref_put:
@@ -1570,6 +1577,7 @@ static void __exit amiga_serial_remove(struct platform_device *pdev)
 {
 	struct serial_state *state = platform_get_drvdata(pdev);
 
+	tty_port_unregister_device(&state->tport, serial_driver, 0);
 	tty_unregister_driver(serial_driver);
 	tty_driver_kref_put(serial_driver);
 	tty_port_destroy(&state->tport);
