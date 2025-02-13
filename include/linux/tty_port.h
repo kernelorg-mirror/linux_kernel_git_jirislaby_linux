@@ -138,8 +138,6 @@ struct tty_port {
 					   kernel */
 
 void tty_port_init(struct tty_port *port);
-void tty_port_link_device(struct tty_port *port, struct tty_driver *driver,
-		unsigned index);
 struct device *tty_port_register_device(struct tty_port *port,
 		struct tty_driver *driver, unsigned index,
 		struct device *device);

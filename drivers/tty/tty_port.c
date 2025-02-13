@@ -114,14 +114,13 @@ EXPORT_SYMBOL(tty_port_init);
  * tty_port_install() is used in the driver. If used, this has to be called
  * before tty_register_driver().
  */
-void tty_port_link_device(struct tty_port *port,
-		struct tty_driver *driver, unsigned index)
+static void tty_port_link_device(struct tty_port *port,
+				 struct tty_driver *driver, unsigned index)
 {
 	if (WARN_ON(index >= driver->num))
 		return;
 	driver->ports[index] = port;
 }
-EXPORT_SYMBOL_GPL(tty_port_link_device);
 
 /**
  * tty_port_register_device - register tty device
@@ -132,7 +131,7 @@ EXPORT_SYMBOL_GPL(tty_port_link_device);
  *
  * It is the same as tty_register_device() except the provided @port is linked
  * to a concrete tty specified by @index. Use this or tty_port_install() (or
- * both). Call tty_port_link_device() as a last resort.
+ * both).
  */
 struct device *tty_port_register_device(struct tty_port *port,
 		struct tty_driver *driver, unsigned index,
@@ -153,7 +152,7 @@ EXPORT_SYMBOL_GPL(tty_port_register_device);
  *
  * It is the same as tty_register_device_attr() except the provided @port is
  * linked to a concrete tty specified by @index. Use this or tty_port_install()
- * (or both). Call tty_port_link_device() as a last resort.
+ * (or both).
  */
 struct device *tty_port_register_device_attr(struct tty_port *port,
 		struct tty_driver *driver, unsigned index,
@@ -733,7 +732,7 @@ EXPORT_SYMBOL(tty_port_close);
  *
  * It is the same as tty_standard_install() except the provided @port is linked
  * to a concrete tty specified by @tty. Use this or tty_port_register_device()
- * (or both). Call tty_port_link_device() as a last resort.
+ * (or both).
  */
 int tty_port_install(struct tty_port *port, struct tty_driver *driver,
 		struct tty_struct *tty)

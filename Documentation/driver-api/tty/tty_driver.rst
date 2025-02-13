@@ -89,23 +89,18 @@ Linking Devices to Ports
 ------------------------
 As stated earlier, every TTY device shall have a struct tty_port assigned to
 it. It must be known to the TTY layer at :c:member:`tty_driver.ops.install()`
-at latest.  There are few helpers to *link* the two. Ideally, the driver uses
-tty_port_register_device() or tty_port_register_device_attr() instead of
-tty_register_device() and tty_register_device_attr() at the registration time.
+at latest.  There are few helpers to *link* the two. The driver is supposed to
+use tty_port_register_device() or tty_port_register_device_attr().
 This way, the driver needs not care about linking later on.
 
-If that is not possible, the driver still can link the tty_port to a specific
-index *before* the actual registration by tty_port_link_device(). If it still
-does not fit, tty_port_install() can be used from the
-:c:member:`tty_driver.ops.install` hook as a last resort. The last one is
-dedicated mostly for in-memory devices like PTY where tty_ports are allocated
-on demand.
+If that is not possible, tty_port_install() can be used from the
+:c:member:`tty_driver.ops.install` hook as a last resort. This is dedicated
+mostly for in-memory devices like PTY where tty_ports are allocated on demand.
 
 The linking routines are documented here:
 
 .. kernel-doc::  drivers/tty/tty_port.c
-   :identifiers: tty_port_link_device tty_port_register_device
-        tty_port_register_device_attr
+   :identifiers: tty_port_register_device tty_port_register_device_attr
 
 ----
 
