@@ -275,8 +275,8 @@ static int xilinx_allocate_msi_domains(struct xilinx_pcie *pcie)
 	struct fwnode_handle *fwnode = dev_fwnode(pcie->dev);
 	struct irq_domain *parent;
 
-	parent = irq_domain_create_linear(fwnode, XILINX_NUM_MSI_IRQS,
-					  &xilinx_msi_domain_ops, pcie);
+	parent = irq_domain_create_linear(fwnode, XILINX_NUM_MSI_IRQS, &xilinx_msi_domain_ops,
+					  pcie);
 	if (!parent) {
 		dev_err(pcie->dev, "failed to create IRQ domain\n");
 		return -ENOMEM;
@@ -461,9 +461,8 @@ static int xilinx_pcie_init_irq_domain(struct xilinx_pcie *pcie)
 		return -ENODEV;
 	}
 
-	pcie->leg_domain = irq_domain_add_linear(pcie_intc_node, PCI_NUM_INTX,
-						 &intx_domain_ops,
-						 pcie);
+	pcie->leg_domain = irq_domain_create_linear(of_fwnode_handle(pcie_intc_node), PCI_NUM_INTX,
+						    &intx_domain_ops, pcie);
 	of_node_put(pcie_intc_node);
 	if (!pcie->leg_domain) {
 		dev_err(dev, "Failed to get a INTx IRQ domain\n");
