@@ -397,9 +397,8 @@ static int grgpio_probe(struct platform_device *ofdev)
 			return -EINVAL;
 		}
 
-		priv->domain = irq_domain_add_linear(np, gc->ngpio,
-						     &grgpio_irq_domain_ops,
-						     priv);
+		priv->domain = irq_domain_create_linear(dev_fwnode(&ofdev->dev), gc->ngpio,
+							&grgpio_irq_domain_ops, priv);
 		if (!priv->domain) {
 			dev_err(dev, "Could not add irq domain\n");
 			return -EINVAL;

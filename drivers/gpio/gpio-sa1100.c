@@ -319,9 +319,8 @@ void __init sa1100_init_gpio(void)
 
 	gpiochip_add_data(&sa1100_gpio_chip.chip, NULL);
 
-	sa1100_gpio_irqdomain = irq_domain_add_simple(NULL,
-			28, IRQ_GPIO0,
-			&sa1100_gpio_irqdomain_ops, sgc);
+	sa1100_gpio_irqdomain = irq_domain_create_simple(NULL, 28, IRQ_GPIO0,
+							 &sa1100_gpio_irqdomain_ops, sgc);
 
 	for (i = 0; i < ARRAY_SIZE(sa1100_gpio_irqs); i++)
 		irq_set_chained_handler_and_data(sa1100_gpio_irqs[i],

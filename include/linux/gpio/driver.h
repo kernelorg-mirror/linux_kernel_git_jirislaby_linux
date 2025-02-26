@@ -287,7 +287,7 @@ struct gpio_irq_chip {
 	/**
 	 * @first:
 	 *
-	 * Required for static IRQ allocation. If set, irq_domain_add_simple()
+	 * Required for static IRQ allocation. If set, irq_domain_create_simple()
 	 * will allocate and map all IRQs during initialization.
 	 */
 	unsigned int first;
