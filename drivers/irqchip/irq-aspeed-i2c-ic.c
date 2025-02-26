@@ -82,9 +82,8 @@ static int __init aspeed_i2c_ic_of_init(struct device_node *node,
 		goto err_iounmap;
 	}
 
-	i2c_ic->irq_domain = irq_domain_add_linear(node, ASPEED_I2C_IC_NUM_BUS,
-						   &aspeed_i2c_ic_irq_domain_ops,
-						   NULL);
+	i2c_ic->irq_domain = irq_domain_create_linear(of_fwnode_handle(node), ASPEED_I2C_IC_NUM_BUS,
+						      &aspeed_i2c_ic_irq_domain_ops, NULL);
 	if (!i2c_ic->irq_domain) {
 		ret = -ENOMEM;
 		goto err_iounmap;

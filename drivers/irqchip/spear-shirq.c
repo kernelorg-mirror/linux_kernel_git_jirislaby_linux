@@ -239,8 +239,8 @@ static int __init shirq_init(struct spear_shirq **shirq_blocks, int block_nr,
 		goto err_unmap;
 	}
 
-	shirq_domain = irq_domain_add_legacy(np, nr_irqs, virq_base, 0,
-			&irq_domain_simple_ops, NULL);
+	shirq_domain = irq_domain_create_legacy(of_fwnode_handle(np), nr_irqs, virq_base, 0,
+						&irq_domain_simple_ops, NULL);
 	if (WARN_ON(!shirq_domain)) {
 		pr_warn("%s: irq domain init failed\n", __func__);
 		goto err_free_desc;
