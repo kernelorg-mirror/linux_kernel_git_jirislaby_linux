@@ -532,6 +532,9 @@ static void serial8250_rpm_put(struct uart_8250_port *p)
 	pm_runtime_put_autosuspend(p->port.dev);
 }
 
+DEFINE_GUARD(serial8250_rpm, struct uart_8250_port *,
+	     serial8250_rpm_get(_T), serial8250_rpm_put(_T));
+
 /**
  *	serial8250_em485_init() - put uart_8250_port into rs485 emulating
  *	@p:	uart_8250_port port instance
@@ -671,6 +674,9 @@ static void serial8250_rpm_put_tx(struct uart_8250_port *p)
 	pm_runtime_mark_last_busy(p->port.dev);
 	pm_runtime_put_autosuspend(p->port.dev);
 }
+
+DEFINE_GUARD(serial8250_rpm_tx, struct uart_8250_port *,
+	     serial8250_rpm_get_tx(_T), serial8250_rpm_put_tx(_T));
 
 /*
  * IER sleep support.  UARTs which have EFRs need the "extended
