@@ -134,8 +134,7 @@ static void irq_sim_handle_irq(struct irq_work *work)
 	work_ctx = container_of(work, struct irq_sim_work_ctx, work);
 
 	while (!bitmap_empty(work_ctx->pending, work_ctx->irq_count)) {
-		offset = find_next_bit(work_ctx->pending,
-				       work_ctx->irq_count, offset);
+		offset = find_next_bit_wrap(work_ctx->pending, work_ctx->irq_count, offset);
 		clear_bit(offset, work_ctx->pending);
 		irqnum = irq_find_mapping(work_ctx->domain, offset);
 		handle_simple_irq(irq_to_desc(irqnum));
