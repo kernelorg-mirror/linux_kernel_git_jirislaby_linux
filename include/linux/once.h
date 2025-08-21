@@ -13,9 +13,26 @@ void __do_once_done(bool *done, struct static_key_true *once_key,
 		    unsigned long *flags, struct module *mod);
 
 /* Variant for process contexts only. */
-bool __do_once_sleepable_start(bool *done);
+bool __do_once_sleepable_start(bool *done, unsigned long *flags);
 void __do_once_sleepable_done(bool *done, struct static_key_true *once_key,
-			      struct module *mod);
+			      unsigned long *flags, struct module *mod);
+
+#define __DO_ONCE(expr, start, done)						\
+	({									\
+		bool ___ret = false;						\
+		static bool __section(".data..do_once") ___done = false;	\
+		static DEFINE_STATIC_KEY_TRUE(___once_key);			\
+		if (static_branch_unlikely(&___once_key)) {			\
+			unsigned long ___flags;					\
+			___ret = start(&___done, &___flags);			\
+			if (unlikely(___ret)) {					\
+				expr;						\
+				done(&___done, &___once_key,			\
+					       &___flags, THIS_MODULE);		\
+			}							\
+		}								\
+		___ret;								\
+	})
 
 /* Call a function exactly once. The idea of DO_ONCE() is to perform
  * a function call such as initialization of random seeds, etc, only
@@ -43,39 +60,11 @@ void __do_once_sleepable_done(bool *done, struct static_key_true *once_key,
  * places, then a common helper function must be defined, so that only
  * a single static key will be placed there!
  */
-#define DO_ONCE(func, ...)						     \
-	({								     \
-		bool ___ret = false;					     \
-		static bool __section(".data..do_once") ___done = false;     \
-		static DEFINE_STATIC_KEY_TRUE(___once_key);		     \
-		if (static_branch_unlikely(&___once_key)) {		     \
-			unsigned long ___flags;				     \
-			___ret = __do_once_start(&___done, &___flags);	     \
-			if (unlikely(___ret)) {				     \
-				func(__VA_ARGS__);			     \
-				__do_once_done(&___done, &___once_key,	     \
-					       &___flags, THIS_MODULE);	     \
-			}						     \
-		}							     \
-		___ret;							     \
-	})
-
+#define DO_ONCE(func, ...)		__DO_ONCE(func(__VA_ARGS__), __do_once_start, \
+						  __do_once_done)
 /* Variant of DO_ONCE() for process/sleepable contexts. */
-#define DO_ONCE_SLEEPABLE(func, ...)						\
-	({									\
-		bool ___ret = false;						\
-		static bool __section(".data..do_once") ___done = false;	\
-		static DEFINE_STATIC_KEY_TRUE(___once_key);			\
-		if (static_branch_unlikely(&___once_key)) {			\
-			___ret = __do_once_sleepable_start(&___done);		\
-			if (unlikely(___ret)) {					\
-				func(__VA_ARGS__);				\
-				__do_once_sleepable_done(&___done, &___once_key,\
-						    THIS_MODULE);		\
-			}							\
-		}								\
-		___ret;								\
-	})
+#define DO_ONCE_SLEEPABLE(func, ...)	__DO_ONCE(func(__VA_ARGS__), __do_once_sleepable_start, \
+						  __do_once_sleepable_done)
 
 #define get_random_once(buf, nbytes)					     \
 	DO_ONCE(get_random_bytes, (buf), (nbytes))
