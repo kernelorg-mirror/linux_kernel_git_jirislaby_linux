@@ -124,7 +124,7 @@
 #define UART_OMAP_TO_H                 0x27
 struct omap8250_priv {
 	void __iomem *membase;
-	int line;
+	struct uart_8250_port *uport;
 	u8 habit;
 	u8 mdr1;
 	u8 mdr3;
@@ -628,7 +628,7 @@ static int omap_8250_dma_handle_irq(struct uart_port *port);
 static irqreturn_t omap8250_irq(int irq, void *dev_id)
 {
 	struct omap8250_priv *priv = dev_id;
-	struct uart_8250_port *up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 	struct uart_port *port = &up->port;
 	unsigned int iir, lsr;
 	int ret;
@@ -1506,7 +1506,7 @@ static int omap8250_probe(struct platform_device *pdev)
 	}
 
 	priv->membase = membase;
-	priv->line = -ENODEV;
+	priv->uport = NULL;
 	priv->latency = PM_QOS_CPU_LATENCY_DEFAULT_VALUE;
 	priv->calc_latency = PM_QOS_CPU_LATENCY_DEFAULT_VALUE;
 	cpu_latency_qos_add_request(&priv->pm_qos_request, priv->latency);
@@ -1587,12 +1587,13 @@ static int omap8250_probe(struct platform_device *pdev)
 			goto err;
 	}
 
-	ret = serial8250_register_8250_port(&up);
-	if (ret < 0) {
+	struct uart_8250_port *uport = serial8250_register_8250_port(&up);
+	if (IS_ERR(uport)) {
+		ret = PTR_ERR(uport);
 		dev_err(&pdev->dev, "unable to register 8250 port\n");
 		goto err;
 	}
-	priv->line = ret;
+	priv->uport = uport;
 	pm_runtime_mark_last_busy(&pdev->dev);
 	pm_runtime_put_autosuspend(&pdev->dev);
 
@@ -1621,10 +1622,10 @@ static void omap8250_remove(struct platform_device *pdev)
 	if (err)
 		dev_err(&pdev->dev, "Failed to resume hardware\n");
 
-	up = serial8250_get_port(priv->line);
+	up = priv->uport;
 	omap_8250_shutdown(&up->port);
-	serial8250_unregister_port(priv->line);
-	priv->line = -ENODEV;
+	serial8250_unregister_port(up);
+	priv->uport = NULL;
 	dev_pm_clear_wake_irq(&pdev->dev);
 	pm_runtime_dont_use_autosuspend(&pdev->dev);
 	pm_runtime_put_sync(&pdev->dev);
@@ -1656,7 +1657,7 @@ static void omap8250_complete(struct device *dev)
 static int omap8250_suspend(struct device *dev)
 {
 	struct omap8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 	int err = 0;
 
 	err = omap8250_select_wakeup_pinctrl(dev, priv);
@@ -1666,7 +1667,7 @@ static int omap8250_suspend(struct device *dev)
 		return err;
 	}
 
-	serial8250_suspend_port(priv->line);
+	serial8250_suspend_port(up);
 
 	err = pm_runtime_resume_and_get(dev);
 	if (err)
@@ -1684,7 +1685,7 @@ static int omap8250_suspend(struct device *dev)
 static int omap8250_resume(struct device *dev)
 {
 	struct omap8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 	int err;
 
 	err = pinctrl_select_default_state(dev);
@@ -1700,7 +1701,7 @@ static int omap8250_resume(struct device *dev)
 			return err;
 	}
 
-	serial8250_resume_port(priv->line);
+	serial8250_resume_port(up);
 	/* Paired with pm_runtime_resume_and_get() in omap8250_suspend() */
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_put_autosuspend(dev);
@@ -1772,10 +1773,7 @@ static int omap8250_soft_reset(struct device *dev)
 static int omap8250_runtime_suspend(struct device *dev)
 {
 	struct omap8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = NULL;
-
-	if (priv->line >= 0)
-		up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 
 	if (priv->habit & UART_ERRATA_CLOCK_DISABLE) {
 		int ret;
@@ -1805,14 +1803,11 @@ static int omap8250_runtime_suspend(struct device *dev)
 static int omap8250_runtime_resume(struct device *dev)
 {
 	struct omap8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = NULL;
+	struct uart_8250_port *up = priv->uport;
 
 	/* Did the hardware wake to a device IO interrupt before a wakeirq? */
 	if (atomic_read(&priv->active))
 		return 0;
-
-	if (priv->line >= 0)
-		up = serial8250_get_port(priv->line);
 
 	if (up && omap8250_lost_context(up)) {
 		guard(uart_port_lock_irq)(&up->port);
