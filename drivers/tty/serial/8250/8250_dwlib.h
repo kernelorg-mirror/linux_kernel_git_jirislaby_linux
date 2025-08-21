@@ -79,7 +79,7 @@
 
 struct dw8250_port_data {
 	/* Port properties */
-	int			line;
+	struct uart_8250_port *uport;
 
 	/* DMA operations */
 	struct uart_8250_dma	dma;

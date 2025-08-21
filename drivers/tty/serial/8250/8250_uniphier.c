@@ -31,7 +31,7 @@
 #define UNIPHIER_UART_DLR		(9 << (UNIPHIER_UART_REGSHIFT))
 
 struct uniphier8250_priv {
-	int line;
+	struct uart_8250_port *uport;
 	struct clk *clk;
 	spinlock_t atomic_write_lock;
 };
@@ -219,13 +219,12 @@ static int uniphier_uart_probe(struct platform_device *pdev)
 	up.dl_read = uniphier_serial_dl_read;
 	up.dl_write = uniphier_serial_dl_write;
 
-	ret = serial8250_register_8250_port(&up);
-	if (ret < 0) {
+	priv->uport = serial8250_register_8250_port(&up);
+	if (IS_ERR(priv->uport)) {
 		dev_err(dev, "failed to register 8250 port\n");
 		clk_disable_unprepare(priv->clk);
-		return ret;
+		return PTR_ERR(priv->uport);
 	}
-	priv->line = ret;
 
 	platform_set_drvdata(pdev, priv);
 
@@ -236,16 +235,16 @@ static void uniphier_uart_remove(struct platform_device *pdev)
 {
 	struct uniphier8250_priv *priv = platform_get_drvdata(pdev);
 
-	serial8250_unregister_port(priv->line);
+	serial8250_unregister_port(priv->uport);
 	clk_disable_unprepare(priv->clk);
 }
 
 static int __maybe_unused uniphier_uart_suspend(struct device *dev)
 {
 	struct uniphier8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 
-	serial8250_suspend_port(priv->line);
+	serial8250_suspend_port(up);
 
 	if (!uart_console(&up->port) || console_suspend_enabled)
 		clk_disable_unprepare(priv->clk);
@@ -256,7 +255,7 @@ static int __maybe_unused uniphier_uart_suspend(struct device *dev)
 static int __maybe_unused uniphier_uart_resume(struct device *dev)
 {
 	struct uniphier8250_priv *priv = dev_get_drvdata(dev);
-	struct uart_8250_port *up = serial8250_get_port(priv->line);
+	struct uart_8250_port *up = priv->uport;
 	int ret;
 
 	if (!uart_console(&up->port) || console_suspend_enabled) {
@@ -265,7 +264,7 @@ static int __maybe_unused uniphier_uart_resume(struct device *dev)
 			return ret;
 	}
 
-	serial8250_resume_port(priv->line);
+	serial8250_resume_port(up);
 
 	return 0;
 }
