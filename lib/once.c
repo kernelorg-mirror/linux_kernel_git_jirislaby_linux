@@ -69,7 +69,7 @@ EXPORT_SYMBOL(__do_once_done);
 
 static DEFINE_MUTEX(once_mutex);
 
-bool __do_once_sleepable_start(bool *done)
+bool __do_once_sleepable_start(bool *done, unsigned long *flags)
 	__acquires(once_mutex)
 {
 	mutex_lock(&once_mutex);
@@ -88,7 +88,7 @@ bool __do_once_sleepable_start(bool *done)
 EXPORT_SYMBOL(__do_once_sleepable_start);
 
 void __do_once_sleepable_done(bool *done, struct static_key_true *once_key,
-			 struct module *mod)
+			      unsigned long *flags, struct module *mod)
 	__releases(once_mutex)
 {
 	*done = true;
