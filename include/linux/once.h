@@ -26,9 +26,9 @@ void __do_once_sleepable_done(bool *done, struct static_key_true *once_key,
 			unsigned long ___flags;					\
 			___ret = start(&___done, &___flags);			\
 			if (unlikely(___ret)) {					\
-				expr;						\
-				done(&___done, &___once_key,			\
-					       &___flags, THIS_MODULE);		\
+				if (expr)					\
+					done(&___done, &___once_key,		\
+						       &___flags, THIS_MODULE);	\
 			}							\
 		}								\
 		___ret;								\
@@ -60,11 +60,16 @@ void __do_once_sleepable_done(bool *done, struct static_key_true *once_key,
  * places, then a common helper function must be defined, so that only
  * a single static key will be placed there!
  */
-#define DO_ONCE(func, ...)		__DO_ONCE(func(__VA_ARGS__), __do_once_start, \
-						  __do_once_done)
+#define DO_ONCE(func, ...)		__DO_ONCE(({ func(__VA_ARGS__); true; }), \
+						  __do_once_start, __do_once_done)
 /* Variant of DO_ONCE() for process/sleepable contexts. */
-#define DO_ONCE_SLEEPABLE(func, ...)	__DO_ONCE(func(__VA_ARGS__), __do_once_sleepable_start, \
+#define DO_ONCE_SLEEPABLE(func, ...)	__DO_ONCE(({ func(__VA_ARGS__); true; }), \
+						  __do_once_sleepable_start, \
 						  __do_once_sleepable_done)
+
+#define DO_ONCE_UNLESS_FAILED(expr)		__DO_ONCE(expr, __do_once_start, __do_once_done)
+#define DO_ONCE_SLEEPABLE_UNLESS_FAILED(expr)	__DO_ONCE(expr, __do_once_sleepable_start, \
+							  __do_once_sleepable_done)
 
 #define get_random_once(buf, nbytes)					     \
 	DO_ONCE(get_random_bytes, (buf), (nbytes))
