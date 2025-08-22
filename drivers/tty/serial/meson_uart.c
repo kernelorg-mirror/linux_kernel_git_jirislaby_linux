@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
+#include <linux/once.h>
 #include <linux/platform_device.h>
 #include <linux/serial.h>
 #include <linux/serial_core.h>
@@ -748,12 +749,9 @@ static int meson_uart_probe(struct platform_device *pdev)
 
 	uart_driver = meson_uart_current(priv_data);
 
-	if (!uart_driver->state) {
-		ret = uart_register_driver(uart_driver);
-		if (ret)
-			return dev_err_probe(&pdev->dev, ret,
-					     "can't register uart driver\n");
-	}
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(uart_driver)));
+	if (ret)
+		return dev_err_probe(&pdev->dev, ret, "can't register uart driver\n");
 
 	port->iotype = UPIO_MEM;
 	port->mapbase = res_mem->start;
