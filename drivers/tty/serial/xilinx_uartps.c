@@ -20,6 +20,7 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/of.h>
+#include <linux/once.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <linux/gpio/consumer.h>
@@ -1647,7 +1648,7 @@ static int cdns_rs485_config(struct uart_port *port, struct ktermios *termios,
  */
 static int cdns_uart_probe(struct platform_device *pdev)
 {
-	int rc, id, irq;
+	int id, irq;
 	struct uart_port *port;
 	struct resource *res;
 	struct cdns_uart *cdns_uart_data;
@@ -1671,16 +1672,16 @@ static int cdns_uart_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	if (!cdns_uart_uart_driver.state) {
+	int rc = 0;
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!({
 #ifdef CONFIG_SERIAL_XILINX_PS_UART_CONSOLE
 		cdns_uart_uart_driver.cons = &cdns_uart_console;
 #endif
-
 		rc = uart_register_driver(&cdns_uart_uart_driver);
-		if (rc < 0) {
-			dev_err(&pdev->dev, "Failed to register driver\n");
-			return rc;
-		}
+	}));
+	if (rc < 0) {
+		dev_err(&pdev->dev, "Failed to register driver\n");
+		return rc;
 	}
 
 	match = of_match_node(cdns_uart_of_match, pdev->dev.of_node);

@@ -21,6 +21,7 @@
 #include <linux/console.h>
 #include <linux/sysrq.h>
 #include <linux/device.h>
+#include <linux/once.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/serial_core.h>
@@ -648,7 +649,6 @@ static struct console amba_console = {
 #define AMBA_CONSOLE	NULL
 #endif
 
-static DEFINE_MUTEX(amba_reg_lock);
 static struct uart_driver amba_reg = {
 	.owner			= THIS_MODULE,
 	.driver_name		= "ttyAM",
@@ -663,7 +663,7 @@ static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 {
 	struct uart_amba_port *uap;
 	void __iomem *base;
-	int i, ret;
+	int i;
 
 	for (i = 0; i < ARRAY_SIZE(amba_ports); i++)
 		if (amba_ports[i] == NULL)
@@ -703,17 +703,12 @@ static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 
 	amba_set_drvdata(dev, uap);
 
-	mutex_lock(&amba_reg_lock);
-	if (!amba_reg.state) {
-		ret = uart_register_driver(&amba_reg);
-		if (ret < 0) {
-			mutex_unlock(&amba_reg_lock);
-			dev_err(uap->port.dev,
-				"Failed to register AMBA-PL010 driver\n");
-			return ret;
-		}
+	int ret = 0;
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(&amba_reg)));
+	if (ret < 0) {
+		dev_err(uap->port.dev, "Failed to register AMBA-PL010 driver\n");
+		return ret;
 	}
-	mutex_unlock(&amba_reg_lock);
 
 	ret = uart_add_one_port(&amba_reg, &uap->port);
 	if (ret)
