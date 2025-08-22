@@ -23,6 +23,7 @@
 #include <linux/platform_device.h>
 #include <linux/sysrq.h>
 #include <linux/device.h>
+#include <linux/once.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/serial_core.h>
@@ -2990,22 +2991,20 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 
 static int pl011_register_port(struct uart_amba_port *uap)
 {
-	int ret, i;
+	int i;
 
 	/* Ensure interrupts from this UART are masked and cleared */
 	pl011_write(0, uap, REG_IMSC);
 	pl011_write(0xffff, uap, REG_ICR);
 
-	if (!amba_reg.state) {
-		ret = uart_register_driver(&amba_reg);
-		if (ret < 0) {
-			dev_err(uap->port.dev,
-				"Failed to register AMBA-PL011 driver\n");
-			for (i = 0; i < ARRAY_SIZE(amba_ports); i++)
-				if (amba_ports[i] == uap)
-					amba_ports[i] = NULL;
-			return ret;
-		}
+	int ret = 0;
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(&amba_reg)));
+	if (ret < 0) {
+		dev_err(uap->port.dev, "Failed to register AMBA-PL011 driver\n");
+		for (i = 0; i < ARRAY_SIZE(amba_ports); i++)
+			if (amba_ports[i] == uap)
+				amba_ports[i] = NULL;
+		return ret;
 	}
 
 	ret = uart_add_one_port(&amba_reg, &uap->port);

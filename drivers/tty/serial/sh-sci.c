@@ -37,6 +37,7 @@
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/once.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
@@ -3550,7 +3551,6 @@ static inline int sci_probe_earlyprintk(struct platform_device *pdev)
 
 static const char banner[] __initconst = "SuperH (H)SCI(F) driver initialized";
 
-static DEFINE_MUTEX(sci_uart_registration_lock);
 static struct uart_driver sci_uart_driver = {
 	.owner		= THIS_MODULE,
 	.driver_name	= "sci",
@@ -3794,8 +3794,6 @@ static int sci_probe_single(struct platform_device *dev,
 				      struct sci_port *sciport,
 				      struct resource *sci_res)
 {
-	int ret;
-
 	/* Sanity check */
 	if (unlikely(index >= SCI_NPORTS)) {
 		dev_notice(&dev->dev, "Attempting to register port %d when only %d are available\n",
@@ -3807,15 +3805,10 @@ static int sci_probe_single(struct platform_device *dev,
 	if (sci_ports_in_use & BIT(index))
 		return -EBUSY;
 
-	mutex_lock(&sci_uart_registration_lock);
-	if (!sci_uart_driver.state) {
-		ret = uart_register_driver(&sci_uart_driver);
-		if (ret) {
-			mutex_unlock(&sci_uart_registration_lock);
-			return ret;
-		}
-	}
-	mutex_unlock(&sci_uart_registration_lock);
+	int ret = 0;
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(&sci_uart_driver)));
+	if (ret)
+		return ret;
 
 	ret = sci_init_single(dev, sciport, index, p, false);
 	if (ret)

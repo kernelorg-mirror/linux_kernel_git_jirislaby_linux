@@ -33,6 +33,7 @@
 #include <linux/math.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/once.h>
 #include <linux/platform_device.h>
 #include <linux/serial.h>
 #include <linux/serial_core.h>
@@ -2022,12 +2023,10 @@ static int s3c24xx_serial_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	if (!s3c24xx_uart_drv.state) {
-		ret = uart_register_driver(&s3c24xx_uart_drv);
-		if (ret < 0) {
-			pr_err("Failed to register Samsung UART driver\n");
-			return ret;
-		}
+	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(&s3c24xx_uart_drv)));
+	if (ret < 0) {
+		pr_err("Failed to register Samsung UART driver\n");
+		return ret;
 	}
 
 	dev_dbg(&pdev->dev, "%s: adding port\n", __func__);
