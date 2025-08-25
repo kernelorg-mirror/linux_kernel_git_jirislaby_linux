@@ -1268,7 +1268,14 @@ static const struct uart_ops cdns_uart_ops = {
 #endif
 };
 
-static struct uart_driver cdns_uart_uart_driver;
+static struct uart_driver cdns_uart_uart_driver = {
+	.owner = THIS_MODULE,
+	.driver_name = CDNS_UART_NAME,
+	.dev_name = CDNS_UART_TTY_NAME,
+	.major = CDNS_UART_MAJOR,
+	.minor = CDNS_UART_MINOR,
+	.nr = CDNS_UART_NR_PORTS,
+};
 
 #ifdef CONFIG_SERIAL_XILINX_PS_UART_CONSOLE
 /**
@@ -1665,12 +1672,6 @@ static int cdns_uart_probe(struct platform_device *pdev)
 	}
 
 	if (!cdns_uart_uart_driver.state) {
-		cdns_uart_uart_driver.owner = THIS_MODULE;
-		cdns_uart_uart_driver.driver_name = CDNS_UART_NAME;
-		cdns_uart_uart_driver.dev_name = CDNS_UART_TTY_NAME;
-		cdns_uart_uart_driver.major = CDNS_UART_MAJOR;
-		cdns_uart_uart_driver.minor = CDNS_UART_MINOR;
-		cdns_uart_uart_driver.nr = CDNS_UART_NR_PORTS;
 #ifdef CONFIG_SERIAL_XILINX_PS_UART_CONSOLE
 		cdns_uart_uart_driver.cons = &cdns_uart_console;
 #endif
