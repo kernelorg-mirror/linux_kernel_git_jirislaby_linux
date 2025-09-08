@@ -3560,6 +3560,7 @@ static struct uart_driver sci_uart_driver = {
 	.nr		= SCI_NPORTS,
 	.cons		= SCI_CONSOLE,
 };
+static bool sci_uart_driver_registered;
 
 static void sci_remove(struct platform_device *dev)
 {
@@ -3809,6 +3810,7 @@ static int sci_probe_single(struct platform_device *dev,
 	DO_ONCE_SLEEPABLE_UNLESS_FAILED(!(ret = uart_register_driver(&sci_uart_driver)));
 	if (ret)
 		return ret;
+	sci_uart_driver_registered = true;
 
 	ret = sci_init_single(dev, sciport, index, p, false);
 	if (ret)
@@ -4009,7 +4011,7 @@ static void __exit sci_exit(void)
 {
 	platform_driver_unregister(&sci_driver);
 
-	if (sci_uart_driver.state)
+	if (sci_uart_driver_registered)
 		uart_unregister_driver(&sci_uart_driver);
 }
 
