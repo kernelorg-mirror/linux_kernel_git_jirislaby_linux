@@ -11,6 +11,7 @@
  *  membase is an 'ioremapped' cookie.
  */
 
+#include <linux/cleanup.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/ioport.h>
@@ -3008,8 +3009,10 @@ static int bytes_to_fcr_rxtrig(struct uart_8250_port *up, unsigned char bytes)
 	return UART_FCR_R_TRIG_11;
 }
 
-static int do_get_rxtrig(struct tty_port *port)
+static int do_serial8250_get_rxtrig(struct tty_port *port)
 {
+	guard(mutex)(&port->mutex);
+
 	struct uart_state *state = container_of(port, struct uart_state, port);
 	struct uart_port *uport = state->uart_port;
 	struct uart_8250_port *up = up_to_u8250p(uport);
@@ -3018,17 +3021,6 @@ static int do_get_rxtrig(struct tty_port *port)
 		return -EINVAL;
 
 	return fcr_get_rxtrig_bytes(up);
-}
-
-static int do_serial8250_get_rxtrig(struct tty_port *port)
-{
-	int rxtrig_bytes;
-
-	mutex_lock(&port->mutex);
-	rxtrig_bytes = do_get_rxtrig(port);
-	mutex_unlock(&port->mutex);
-
-	return rxtrig_bytes;
 }
 
 static ssize_t rx_trig_bytes_show(struct device *dev,
@@ -3049,8 +3041,10 @@ static ssize_t rx_trig_bytes_show(struct device *dev,
 	return sysfs_emit(buf, "%d\n", rxtrig_bytes);
 }
 
-static int do_set_rxtrig(struct tty_port *port, unsigned char bytes)
+static int do_serial8250_set_rxtrig(struct tty_port *port, unsigned char bytes)
 {
+	guard(mutex)(&port->mutex);
+
 	struct uart_state *state = container_of(port, struct uart_state, port);
 	struct uart_port *uport = state->uart_port;
 	struct uart_8250_port *up = up_to_u8250p(uport);
@@ -3067,18 +3061,8 @@ static int do_set_rxtrig(struct tty_port *port, unsigned char bytes)
 	up->fcr &= ~UART_FCR_TRIGGER_MASK;
 	up->fcr |= (unsigned char)rxtrig;
 	serial_out(up, UART_FCR, up->fcr);
+
 	return 0;
-}
-
-static int do_serial8250_set_rxtrig(struct tty_port *port, unsigned char bytes)
-{
-	int ret;
-
-	mutex_lock(&port->mutex);
-	ret = do_set_rxtrig(port, bytes);
-	mutex_unlock(&port->mutex);
-
-	return ret;
 }
 
 static ssize_t rx_trig_bytes_store(struct device *dev,
