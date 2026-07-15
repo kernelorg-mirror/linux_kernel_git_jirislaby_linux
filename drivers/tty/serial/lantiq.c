@@ -149,16 +149,14 @@ static bool lqasc_tx_ready(struct uart_port *port)
 static void
 lqasc_start_tx(struct uart_port *port)
 {
-	unsigned long flags;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 	u8 ch;
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
+	guard(spinlock_irqsave)(&ltq_port->lock);
+
 	uart_port_tx(port, ch,
 		lqasc_tx_ready(port),
 		writeb(ch, port->membase + LTQ_ASC_TBUF));
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
-	return;
 }
 
 static void
@@ -232,57 +230,55 @@ lqasc_rx_chars(struct uart_port *port)
 static irqreturn_t
 lqasc_tx_int(int irq, void *_port)
 {
-	unsigned long flags;
 	struct uart_port *port = (struct uart_port *)_port;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
-	__raw_writel(ASC_IRNCR_TIR, port->membase + LTQ_ASC_IRNCR);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+	scoped_guard(spinlock_irqsave, &ltq_port->lock)
+		__raw_writel(ASC_IRNCR_TIR, port->membase + LTQ_ASC_IRNCR);
+
 	lqasc_start_tx(port);
+
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t
 lqasc_err_int(int irq, void *_port)
 {
-	unsigned long flags;
 	struct uart_port *port = (struct uart_port *)_port;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
+	guard(spinlock_irqsave)(&ltq_port->lock);
+
 	__raw_writel(ASC_IRNCR_EIR, port->membase + LTQ_ASC_IRNCR);
 	/* clear any pending interrupts */
 	asc_update_bits(0, ASCWHBSTATE_CLRPE | ASCWHBSTATE_CLRFE |
 		ASCWHBSTATE_CLRROE, port->membase + LTQ_ASC_WHBSTATE);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t
 lqasc_rx_int(int irq, void *_port)
 {
-	unsigned long flags;
 	struct uart_port *port = (struct uart_port *)_port;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
+	guard(spinlock_irqsave)(&ltq_port->lock);
+
 	__raw_writel(ASC_IRNCR_RIR, port->membase + LTQ_ASC_IRNCR);
 	lqasc_rx_chars(port);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+
 	return IRQ_HANDLED;
 }
 
 static irqreturn_t lqasc_irq(int irq, void *p)
 {
-	unsigned long flags;
 	u32 stat;
 	struct uart_port *port = p;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
-	stat = readl(port->membase + LTQ_ASC_IRNCR);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+	scoped_guard(spinlock_irqsave, &ltq_port->lock)
+		stat = readl(port->membase + LTQ_ASC_IRNCR);
 	if (!(stat & ASC_IRNCR_MASK))
 		return IRQ_NONE;
 
@@ -328,33 +324,31 @@ lqasc_startup(struct uart_port *port)
 {
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 	int retval;
-	unsigned long flags;
 
 	if (!IS_ERR(ltq_port->clk))
 		clk_prepare_enable(ltq_port->clk);
 	port->uartclk = clk_get_rate(ltq_port->freqclk);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
-	asc_update_bits(ASCCLC_DISS | ASCCLC_RMCMASK, (1 << ASCCLC_RMCOFFSET),
-		port->membase + LTQ_ASC_CLC);
+	scoped_guard(spinlock_irqsave, &ltq_port->lock) {
+		asc_update_bits(ASCCLC_DISS | ASCCLC_RMCMASK, (1 << ASCCLC_RMCOFFSET),
+			port->membase + LTQ_ASC_CLC);
 
-	__raw_writel(0, port->membase + LTQ_ASC_PISEL);
-	__raw_writel(
-		((TXFIFO_FL << ASCTXFCON_TXFITLOFF) & ASCTXFCON_TXFITLMASK) |
-		ASCTXFCON_TXFEN | ASCTXFCON_TXFFLU,
-		port->membase + LTQ_ASC_TXFCON);
-	__raw_writel(
-		((RXFIFO_FL << ASCRXFCON_RXFITLOFF) & ASCRXFCON_RXFITLMASK)
-		| ASCRXFCON_RXFEN | ASCRXFCON_RXFFLU,
-		port->membase + LTQ_ASC_RXFCON);
-	/* make sure other settings are written to hardware before
-	 * setting enable bits
-	 */
-	wmb();
-	asc_update_bits(0, ASCCON_M_8ASYNC | ASCCON_FEN | ASCCON_TOEN |
-		ASCCON_ROEN, port->membase + LTQ_ASC_CON);
-
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+		__raw_writel(0, port->membase + LTQ_ASC_PISEL);
+		__raw_writel(
+			((TXFIFO_FL << ASCTXFCON_TXFITLOFF) & ASCTXFCON_TXFITLMASK) |
+			ASCTXFCON_TXFEN | ASCTXFCON_TXFFLU,
+			port->membase + LTQ_ASC_TXFCON);
+		__raw_writel(
+			((RXFIFO_FL << ASCRXFCON_RXFITLOFF) & ASCRXFCON_RXFITLMASK)
+			| ASCRXFCON_RXFEN | ASCRXFCON_RXFFLU,
+			port->membase + LTQ_ASC_RXFCON);
+		/* make sure other settings are written to hardware before
+		 * setting enable bits
+		 */
+		wmb();
+		asc_update_bits(0, ASCCON_M_8ASYNC | ASCCON_FEN | ASCCON_TOEN |
+			ASCCON_ROEN, port->membase + LTQ_ASC_CON);
+	}
 
 	retval = ltq_port->soc->request_irq(port);
 	if (retval)
@@ -369,17 +363,14 @@ static void
 lqasc_shutdown(struct uart_port *port)
 {
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
-	unsigned long flags;
 
 	ltq_port->soc->free_irq(port);
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
-	__raw_writel(0, port->membase + LTQ_ASC_CON);
-	asc_update_bits(ASCRXFCON_RXFEN, ASCRXFCON_RXFFLU,
-		port->membase + LTQ_ASC_RXFCON);
-	asc_update_bits(ASCTXFCON_TXFEN, ASCTXFCON_TXFFLU,
-		port->membase + LTQ_ASC_TXFCON);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+	scoped_guard(spinlock_irqsave, &ltq_port->lock) {
+		__raw_writel(0, port->membase + LTQ_ASC_CON);
+		asc_update_bits(ASCRXFCON_RXFEN, ASCRXFCON_RXFFLU, port->membase + LTQ_ASC_RXFCON);
+		asc_update_bits(ASCTXFCON_TXFEN, ASCTXFCON_TXFFLU, port->membase + LTQ_ASC_TXFCON);
+	}
 	if (!IS_ERR(ltq_port->clk))
 		clk_disable_unprepare(ltq_port->clk);
 }
@@ -393,7 +384,6 @@ lqasc_set_termios(struct uart_port *port, struct ktermios *new,
 	unsigned int divisor;
 	unsigned int baud;
 	unsigned int con = 0;
-	unsigned long flags;
 	struct ltq_uart_port *ltq_port = to_ltq_uart_port(port);
 
 	cflag = new->c_cflag;
@@ -448,35 +438,33 @@ lqasc_set_termios(struct uart_port *port, struct ktermios *new,
 	/* set error signals  - framing, parity  and overrun, enable receiver */
 	con |= ASCCON_FEN | ASCCON_TOEN | ASCCON_ROEN;
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
+	scoped_guard(spinlock_irqsave, &ltq_port->lock) {
+		/* set up CON */
+		asc_update_bits(0, con, port->membase + LTQ_ASC_CON);
 
-	/* set up CON */
-	asc_update_bits(0, con, port->membase + LTQ_ASC_CON);
+		/* Set baud rate - take a divider of 2 into account */
+		baud = uart_get_baud_rate(port, new, old, 0, port->uartclk / 16);
+		divisor = uart_get_divisor(port, baud);
+		divisor = divisor / 2 - 1;
 
-	/* Set baud rate - take a divider of 2 into account */
-	baud = uart_get_baud_rate(port, new, old, 0, port->uartclk / 16);
-	divisor = uart_get_divisor(port, baud);
-	divisor = divisor / 2 - 1;
+		/* disable the baudrate generator */
+		asc_update_bits(ASCCON_R, 0, port->membase + LTQ_ASC_CON);
 
-	/* disable the baudrate generator */
-	asc_update_bits(ASCCON_R, 0, port->membase + LTQ_ASC_CON);
+		/* make sure the fractional divider is off */
+		asc_update_bits(ASCCON_FDE, 0, port->membase + LTQ_ASC_CON);
 
-	/* make sure the fractional divider is off */
-	asc_update_bits(ASCCON_FDE, 0, port->membase + LTQ_ASC_CON);
+		/* set up to use divisor of 2 */
+		asc_update_bits(ASCCON_BRS, 0, port->membase + LTQ_ASC_CON);
 
-	/* set up to use divisor of 2 */
-	asc_update_bits(ASCCON_BRS, 0, port->membase + LTQ_ASC_CON);
+		/* now we can write the new baudrate into the register */
+		__raw_writel(divisor, port->membase + LTQ_ASC_BG);
 
-	/* now we can write the new baudrate into the register */
-	__raw_writel(divisor, port->membase + LTQ_ASC_BG);
+		/* turn the baudrate generator back on */
+		asc_update_bits(0, ASCCON_R, port->membase + LTQ_ASC_CON);
 
-	/* turn the baudrate generator back on */
-	asc_update_bits(0, ASCCON_R, port->membase + LTQ_ASC_CON);
-
-	/* enable rx */
-	__raw_writel(ASCWHBSTATE_SETREN, port->membase + LTQ_ASC_WHBSTATE);
-
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
+		/* enable rx */
+		__raw_writel(ASCWHBSTATE_SETREN, port->membase + LTQ_ASC_WHBSTATE);
+	}
 
 	/* Don't rewrite B0 */
 	if (tty_termios_baud_rate(new))
@@ -599,7 +587,6 @@ static void
 lqasc_console_write(struct console *co, const char *s, u_int count)
 {
 	struct ltq_uart_port *ltq_port;
-	unsigned long flags;
 
 	if (co->index >= MAXPORTS)
 		return;
@@ -608,9 +595,8 @@ lqasc_console_write(struct console *co, const char *s, u_int count)
 	if (!ltq_port)
 		return;
 
-	spin_lock_irqsave(&ltq_port->lock, flags);
+	guard(spinlock_irqsave)(&ltq_port->lock);
 	lqasc_serial_port_write(&ltq_port->port, s, count);
-	spin_unlock_irqrestore(&ltq_port->lock, flags);
 }
 
 static int __init
