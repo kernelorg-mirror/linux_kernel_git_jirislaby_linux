@@ -11,6 +11,7 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/cleanup.h>
 #include <linux/kernel.h>
 #include <linux/ctype.h>
 #include <linux/kgdb.h>
@@ -109,12 +110,10 @@ static void kgdboc_restore_input_helper(struct work_struct *dummy)
 	 * this work running on different CPUs so they don't try
 	 * to register again already registered handler.
 	 */
-	mutex_lock(&kgdboc_reset_mutex);
+	guard(mutex)(&kgdboc_reset_mutex);
 
 	if (input_register_handler(&kgdboc_reset_handler) == 0)
 		input_unregister_handler(&kgdboc_reset_handler);
-
-	mutex_unlock(&kgdboc_reset_mutex);
 }
 
 static DECLARE_WORK(kgdboc_restore_input_work, kgdboc_restore_input_helper);
@@ -261,17 +260,15 @@ noconfig:
 
 static int kgdboc_probe(struct platform_device *pdev)
 {
-	int ret = 0;
+	guard(mutex)(&config_mutex);
+	if (configured == 1)
+		return 0;
 
-	mutex_lock(&config_mutex);
-	if (configured != 1) {
-		ret = configure_kgdboc();
+	int ret = configure_kgdboc();
 
-		/* Convert "no device" to "defer" so we'll keep trying */
-		if (ret == -ENODEV)
-			ret = -EPROBE_DEFER;
-	}
-	mutex_unlock(&config_mutex);
+	/* Convert "no device" to "defer" so we'll keep trying */
+	if (ret == -ENODEV)
+		return -EPROBE_DEFER;
 
 	return ret;
 }
@@ -321,9 +318,8 @@ err_did_register:
 
 static void exit_kgdboc(void)
 {
-	mutex_lock(&config_mutex);
-	cleanup_kgdboc();
-	mutex_unlock(&config_mutex);
+	scoped_guard(mutex, &config_mutex)
+		cleanup_kgdboc();
 
 	platform_device_unregister(kgdboc_pdev);
 	platform_driver_unregister(&kgdboc_platform_driver);
@@ -361,7 +357,7 @@ static int param_set_kgdboc_var(const char *kmessage,
 		return -EBUSY;
 	}
 
-	mutex_lock(&config_mutex);
+	guard(mutex)(&config_mutex);
 
 	strscpy(config, kmessage);
 	/* Chop out \n char as a result of echo */
@@ -391,8 +387,6 @@ static int param_set_kgdboc_var(const char *kmessage,
 	 */
 	if (ret)
 		config[0] = '\0';
-
-	mutex_unlock(&config_mutex);
 
 	return ret;
 }
