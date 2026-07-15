@@ -9,6 +9,7 @@
  *  Ryan S. Arnold <rsa@us.ibm.com>
  */
 
+#include <linux/cleanup.h>
 #include <linux/console.h>
 #include <linux/cpumask.h>
 #include <linux/init.h>
@@ -27,6 +28,7 @@
 #include <linux/freezer.h>
 #include <linux/slab.h>
 #include <linux/serial_core.h>
+#include <linux/tty_port.h>
 
 #include <linux/uaccess.h>
 
@@ -90,24 +92,18 @@ static int last_hvc = -1;
 static struct hvc_struct *hvc_get_by_index(int index)
 {
 	struct hvc_struct *hp;
-	unsigned long flags;
 
-	mutex_lock(&hvc_structs_mutex);
+	guard(mutex)(&hvc_structs_mutex);
 
 	list_for_each_entry(hp, &hvc_structs, next) {
-		spin_lock_irqsave(&hp->lock, flags);
+		guard(spinlock_irqsave)(&hp->lock);
 		if (hp->index == index) {
 			tty_port_get(&hp->port);
-			spin_unlock_irqrestore(&hp->lock, flags);
-			mutex_unlock(&hvc_structs_mutex);
 			return hp;
 		}
-		spin_unlock_irqrestore(&hp->lock, flags);
 	}
-	hp = NULL;
-	mutex_unlock(&hvc_structs_mutex);
 
-	return hp;
+	return NULL;
 }
 
 static int __hvc_flush(const struct hv_ops *ops, uint32_t vtermno, bool wait)
@@ -249,15 +245,10 @@ console_initcall(hvc_console_init);
 static void hvc_port_destruct(struct tty_port *port)
 {
 	struct hvc_struct *hp = container_of(port, struct hvc_struct, port);
-	unsigned long flags;
 
-	mutex_lock(&hvc_structs_mutex);
-
-	spin_lock_irqsave(&hp->lock, flags);
-	list_del(&(hp->next));
-	spin_unlock_irqrestore(&hp->lock, flags);
-
-	mutex_unlock(&hvc_structs_mutex);
+	scoped_guard(mutex, &hvc_structs_mutex)
+		scoped_guard(spinlock_irqsave, &hp->lock)
+			list_del(&hp->next);
 
 	kfree(hp);
 }
@@ -389,44 +380,43 @@ static int hvc_open(struct tty_struct *tty, struct file * filp)
 static void hvc_close(struct tty_struct *tty, struct file * filp)
 {
 	struct hvc_struct *hp = tty->driver_data;
-	unsigned long flags;
 
 	if (tty_hung_up_p(filp))
 		return;
 
-	spin_lock_irqsave(&hp->port.lock, flags);
+	scoped_guard(spinlock_irqsave, &hp->port.lock) {
+		if (--hp->port.count == 0)
+			break;
 
-	if (--hp->port.count == 0) {
-		spin_unlock_irqrestore(&hp->port.lock, flags);
-		/* We are done with the tty pointer now. */
-		tty_port_tty_set(&hp->port, NULL);
-
-		if (!tty_port_initialized(&hp->port))
-			return;
-
-		if (C_HUPCL(tty))
-			if (hp->ops->dtr_rts)
-				hp->ops->dtr_rts(hp, false);
-
-		if (hp->ops->notifier_del)
-			hp->ops->notifier_del(hp, hp->data);
-
-		/* cancel pending tty resize work */
-		cancel_work_sync(&hp->tty_resize);
-
-		/*
-		 * Chain calls chars_in_buffer() and returns immediately if
-		 * there is no buffered data otherwise sleeps on a wait queue
-		 * waking periodically to check chars_in_buffer().
-		 */
-		tty_wait_until_sent(tty, HVC_CLOSE_WAIT);
-		tty_port_set_initialized(&hp->port, false);
-	} else {
 		if (hp->port.count < 0)
 			printk(KERN_ERR "hvc_close %X: oops, count is %d\n",
-				hp->vtermno, hp->port.count);
-		spin_unlock_irqrestore(&hp->port.lock, flags);
+			       hp->vtermno, hp->port.count);
+		return;
 	}
+
+	/* We are done with the tty pointer now. */
+	tty_port_tty_set(&hp->port, NULL);
+
+	if (!tty_port_initialized(&hp->port))
+		return;
+
+	if (C_HUPCL(tty))
+		if (hp->ops->dtr_rts)
+			hp->ops->dtr_rts(hp, false);
+
+	if (hp->ops->notifier_del)
+		hp->ops->notifier_del(hp, hp->data);
+
+	/* cancel pending tty resize work */
+	cancel_work_sync(&hp->tty_resize);
+
+	/*
+	 * Chain calls chars_in_buffer() and returns immediately if
+	 * there is no buffered data otherwise sleeps on a wait queue
+	 * waking periodically to check chars_in_buffer().
+	 */
+	tty_wait_until_sent(tty, HVC_CLOSE_WAIT);
+	tty_port_set_initialized(&hp->port, false);
 }
 
 static void hvc_cleanup(struct tty_struct *tty)
@@ -439,7 +429,6 @@ static void hvc_cleanup(struct tty_struct *tty)
 static void hvc_hangup(struct tty_struct *tty)
 {
 	struct hvc_struct *hp = tty->driver_data;
-	unsigned long flags;
 
 	if (!hp)
 		return;
@@ -447,20 +436,18 @@ static void hvc_hangup(struct tty_struct *tty)
 	/* cancel pending tty resize work */
 	cancel_work_sync(&hp->tty_resize);
 
-	spin_lock_irqsave(&hp->port.lock, flags);
+	scoped_guard(spinlock_irqsave, &hp->port.lock) {
+		/*
+		 * The N_TTY line discipline has problems such that in a close vs
+		 * open->hangup case this can be called after the final close so prevent
+		 * that from happening for now.
+		 */
+		if (hp->port.count <= 0)
+			return;
 
-	/*
-	 * The N_TTY line discipline has problems such that in a close vs
-	 * open->hangup case this can be called after the final close so prevent
-	 * that from happening for now.
-	 */
-	if (hp->port.count <= 0) {
-		spin_unlock_irqrestore(&hp->port.lock, flags);
-		return;
+		hp->port.count = 0;
 	}
 
-	hp->port.count = 0;
-	spin_unlock_irqrestore(&hp->port.lock, flags);
 	tty_port_tty_set(&hp->port, NULL);
 
 	hp->n_outbuf = 0;
@@ -499,8 +486,7 @@ static int hvc_push(struct hvc_struct *hp)
 static ssize_t hvc_write(struct tty_struct *tty, const u8 *buf, size_t count)
 {
 	struct hvc_struct *hp = tty->driver_data;
-	unsigned long flags;
-	size_t rsize, written = 0;
+	size_t written = 0;
 
 	/* This write was probably executed during a tty close. */
 	if (!hp)
@@ -513,24 +499,22 @@ static ssize_t hvc_write(struct tty_struct *tty, const u8 *buf, size_t count)
 	while (count > 0) {
 		int ret = 0;
 
-		spin_lock_irqsave(&hp->lock, flags);
+		scoped_guard(spinlock_irqsave, &hp->port.lock) {
+			size_t rsize = hp->outbuf_size - hp->n_outbuf;
 
-		rsize = hp->outbuf_size - hp->n_outbuf;
+			if (rsize) {
+				if (rsize > count)
+					rsize = count;
+				memcpy(hp->outbuf + hp->n_outbuf, buf, rsize);
+				count -= rsize;
+				buf += rsize;
+				hp->n_outbuf += rsize;
+				written += rsize;
+			}
 
-		if (rsize) {
-			if (rsize > count)
-				rsize = count;
-			memcpy(hp->outbuf + hp->n_outbuf, buf, rsize);
-			count -= rsize;
-			buf += rsize;
-			hp->n_outbuf += rsize;
-			written += rsize;
+			if (hp->n_outbuf > 0)
+				ret = hvc_push(hp);
 		}
-
-		if (hp->n_outbuf > 0)
-			ret = hvc_push(hp);
-
-		spin_unlock_irqrestore(&hp->lock, flags);
 
 		if (!ret)
 			break;
@@ -562,23 +546,17 @@ static ssize_t hvc_write(struct tty_struct *tty, const u8 *buf, size_t count)
  */
 static void hvc_set_winsz(struct work_struct *work)
 {
-	struct hvc_struct *hp;
-	unsigned long hvc_flags;
-	struct tty_struct *tty;
+	struct hvc_struct *hp = container_of(work, struct hvc_struct, tty_resize);
 	struct winsize ws;
 
-	hp = container_of(work, struct hvc_struct, tty_resize);
+	scoped_guard(tty_port_tty, &hp->port) {
+		struct tty_struct *tty = scoped_tty();
 
-	tty = tty_port_tty_get(&hp->port);
-	if (!tty)
-		return;
+		scoped_guard(spinlock_irqsave, &hp->lock)
+			ws = hp->ws;
 
-	spin_lock_irqsave(&hp->lock, hvc_flags);
-	ws = hp->ws;
-	spin_unlock_irqrestore(&hp->lock, hvc_flags);
-
-	tty_do_resize(tty, &ws);
-	tty_kref_put(tty);
+		tty_do_resize(tty, &ws);
+	}
 }
 
 /*
@@ -799,12 +777,11 @@ static int khvcd(void *unused)
 		try_to_freeze();
 		wmb();
 		if (!cpus_are_in_xmon()) {
-			mutex_lock(&hvc_structs_mutex);
+			guard(mutex)(&hvc_structs_mutex);
 			list_for_each_entry(hp, &hvc_structs, next) {
 				poll_mask |= __hvc_poll(hp, true);
 				cond_resched();
 			}
-			mutex_unlock(&hvc_structs_mutex);
 		} else
 			poll_mask |= HVC_POLL_READ;
 		if (hvc_kicked)
@@ -976,22 +953,18 @@ EXPORT_SYMBOL_GPL(hvc_alloc);
 
 void hvc_remove(struct hvc_struct *hp)
 {
-	unsigned long flags;
 	struct tty_struct *tty;
 
 	tty = tty_port_tty_get(&hp->port);
 
-	console_lock();
-	spin_lock_irqsave(&hp->lock, flags);
-	if (hp->index < MAX_NR_HVC_CONSOLES) {
-		vtermnos[hp->index] = -1;
-		cons_ops[hp->index] = NULL;
-	}
+	scoped_guard(console_lock)
+		scoped_guard(spinlock_irqsave, &hp->lock)
+			if (hp->index < MAX_NR_HVC_CONSOLES) {
+				vtermnos[hp->index] = -1;
+				cons_ops[hp->index] = NULL;
+			}
 
 	/* Don't whack hp->irq because tty_hangup() will need to free the irq. */
-
-	spin_unlock_irqrestore(&hp->lock, flags);
-	console_unlock();
 
 	/*
 	 * We 'put' the instance that was grabbed when the kref instance
