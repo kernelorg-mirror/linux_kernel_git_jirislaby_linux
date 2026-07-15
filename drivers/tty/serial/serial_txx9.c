@@ -960,9 +960,9 @@ static int serial_txx9_register_port(struct uart_port *port)
 {
 	int i;
 	struct uart_port *uart;
-	int ret = -ENOSPC;
 
-	mutex_lock(&serial_txx9_mutex);
+	guard(mutex)(&serial_txx9_mutex);
+
 	for (i = 0; i < UART_NR; i++) {
 		uart = &serial_txx9_ports[i];
 		if (uart_match_port(uart, port)) {
@@ -970,6 +970,7 @@ static int serial_txx9_register_port(struct uart_port *port)
 			break;
 		}
 	}
+
 	if (i == UART_NR) {
 		/* Find unused port */
 		for (i = 0; i < UART_NR; i++) {
@@ -977,24 +978,26 @@ static int serial_txx9_register_port(struct uart_port *port)
 			if (!(uart->iobase || uart->mapbase))
 				break;
 		}
+
+		if (i == UART_NR)
+			return -ENOSPC;
 	}
-	if (i < UART_NR) {
-		uart->iobase = port->iobase;
-		uart->membase = port->membase;
-		uart->irq      = port->irq;
-		uart->uartclk  = port->uartclk;
-		uart->iotype   = port->iotype;
-		uart->flags    = port->flags
-			| UPF_BOOT_AUTOCONF | UPF_FIXED_PORT;
-		uart->mapbase  = port->mapbase;
-		if (port->dev)
-			uart->dev = port->dev;
-		ret = uart_add_one_port(&serial_txx9_reg, uart);
-		if (ret == 0)
-			ret = uart->line;
-	}
-	mutex_unlock(&serial_txx9_mutex);
-	return ret;
+
+	uart->iobase = port->iobase;
+	uart->membase = port->membase;
+	uart->irq      = port->irq;
+	uart->uartclk  = port->uartclk;
+	uart->iotype   = port->iotype;
+	uart->flags    = port->flags | UPF_BOOT_AUTOCONF | UPF_FIXED_PORT;
+	uart->mapbase  = port->mapbase;
+	if (port->dev)
+		uart->dev = port->dev;
+
+	int ret = uart_add_one_port(&serial_txx9_reg, uart);
+	if (ret < 0)
+		return ret;
+
+	return uart->line;
 }
 
 /**
@@ -1008,7 +1011,8 @@ static void serial_txx9_unregister_port(int line)
 {
 	struct uart_port *uart = &serial_txx9_ports[line];
 
-	mutex_lock(&serial_txx9_mutex);
+	guard(mutex)(&serial_txx9_mutex);
+
 	uart_remove_one_port(&serial_txx9_reg, uart);
 	uart->flags = 0;
 	uart->type = PORT_UNKNOWN;
@@ -1016,7 +1020,6 @@ static void serial_txx9_unregister_port(int line)
 	uart->mapbase = 0;
 	uart->membase = NULL;
 	uart->dev = NULL;
-	mutex_unlock(&serial_txx9_mutex);
 }
 
 /*
