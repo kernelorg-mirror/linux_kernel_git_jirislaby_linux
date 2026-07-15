@@ -530,7 +530,6 @@ static void pci1xxxx_tx_burst(struct uart_port *port, u32 uart_status)
 
 static int pci1xxxx_handle_irq(struct uart_port *port)
 {
-	unsigned long flags;
 	u32 status;
 
 	status = pci1xxxx_read_burst_status(port);
@@ -538,15 +537,13 @@ static int pci1xxxx_handle_irq(struct uart_port *port)
 	if (status & UART_BST_STAT_IIR_INT_PEND)
 		return 0;
 
-	spin_lock_irqsave(&port->lock, flags);
+	guard(spinlock_irqsave)(&port->lock);
 
 	if (status & UART_BST_STAT_LSR_RX_MASK)
 		pci1xxxx_rx_burst(port, status);
 
 	if (status & UART_BST_STAT_LSR_THRE)
 		pci1xxxx_tx_burst(port, status);
-
-	spin_unlock_irqrestore(&port->lock, flags);
 
 	return 1;
 }
@@ -555,24 +552,23 @@ static bool pci1xxxx_port_suspend(struct uart_8250_port *up)
 {
 	struct uart_port *port = &up->port;
 	struct tty_port *tport = &port->state->port;
-	unsigned long flags;
 	bool ret = false;
 	u8 wakeup_mask;
 
-	mutex_lock(&tport->mutex);
+	guard(mutex)(&tport->mutex);
+
 	if (port->suspended == 0 && port->dev) {
 		wakeup_mask = readb(up->port.membase + UART_WAKE_MASK_REG);
 
-		uart_port_lock_irqsave(port, &flags);
-		port->mctrl &= ~TIOCM_OUT2;
-		port->ops->set_mctrl(port, port->mctrl);
-		uart_port_unlock_irqrestore(port, flags);
+		scoped_guard(uart_port_lock_irqsave, port) {
+			port->mctrl &= ~TIOCM_OUT2;
+			port->ops->set_mctrl(port, port->mctrl);
+		}
 
 		ret = (wakeup_mask & UART_WAKE_SRCS) != UART_WAKE_SRCS;
 	}
 
 	writeb(UART_WAKE_SRCS, port->membase + UART_WAKE_REG);
-	mutex_unlock(&tport->mutex);
 
 	return ret;
 }
@@ -581,19 +577,17 @@ static void pci1xxxx_port_resume(struct uart_8250_port *up)
 {
 	struct uart_port *port = &up->port;
 	struct tty_port *tport = &port->state->port;
-	unsigned long flags;
 
-	mutex_lock(&tport->mutex);
+	guard(mutex)(&tport->mutex);
+
 	writeb(UART_BLOCK_SET_ACTIVE, port->membase + UART_ACTV_REG);
 	writeb(UART_WAKE_SRCS, port->membase + UART_WAKE_REG);
 
 	if (port->suspended == 0) {
-		uart_port_lock_irqsave(port, &flags);
+		guard(uart_port_lock_irqsave)(port);
 		port->mctrl |= TIOCM_OUT2;
 		port->ops->set_mctrl(port, port->mctrl);
-		uart_port_unlock_irqrestore(port, flags);
 	}
-	mutex_unlock(&tport->mutex);
 }
 
 static int pci1xxxx_suspend(struct device *dev)
