@@ -162,9 +162,8 @@ int tty_audit_push(void)
 
 	buf = tty_audit_buf_ref();
 	if (!IS_ERR_OR_NULL(buf)) {
-		mutex_lock(&buf->mutex);
+		guard(mutex)(&buf->mutex);
 		tty_audit_buf_push(buf);
-		mutex_unlock(&buf->mutex);
 	}
 	return 0;
 }
@@ -227,7 +226,8 @@ void tty_audit_add_data(const struct tty_struct *tty, const void *data,
 	if (IS_ERR_OR_NULL(buf))
 		return;
 
-	mutex_lock(&buf->mutex);
+	guard(mutex)(&buf->mutex);
+
 	dev = MKDEV(tty->driver->major, tty->driver->minor_start) + tty->index;
 	if (buf->dev != dev || buf->icanon != icanon) {
 		tty_audit_buf_push(buf);
@@ -247,5 +247,4 @@ void tty_audit_add_data(const struct tty_struct *tty, const void *data,
 		if (buf->valid == TTY_AUDIT_BUF_SIZE)
 			tty_audit_buf_push(buf);
 	} while (size != 0);
-	mutex_unlock(&buf->mutex);
 }
