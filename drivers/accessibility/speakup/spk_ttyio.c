@@ -200,11 +200,7 @@ static int spk_ttyio_initialise_ldisc(struct spk_synth *synth)
 
 	pr_err("speakup: Failed to set N_SPEAKUP on tty\n");
 
-	tty_lock(tty);
-	if (tty->ops->close)
-		tty->ops->close(tty, NULL);
-	tty_unlock(tty);
-
+	tty_close(tty);
 	tty_kclose(tty);
 
 	return ret;
@@ -356,12 +352,7 @@ void spk_ttyio_release(struct spk_synth *in_synth)
 	if (tty == NULL)
 		return;
 
-	tty_lock(tty);
-
-	if (tty->ops->close)
-		tty->ops->close(tty, NULL);
-
-	tty_unlock(tty);
+	tty_close(tty);
 	tty_kclose(tty);
 
 	in_synth->dev = NULL;
