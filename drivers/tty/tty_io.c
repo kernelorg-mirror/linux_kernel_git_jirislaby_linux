@@ -200,9 +200,8 @@ void tty_add_file(struct tty_struct *tty, struct file *file)
 	priv->tty = tty;
 	priv->file = file;
 
-	spin_lock(&tty->files_lock);
+	guard(spinlock)(&tty->files_lock);
 	list_add(&priv->list, &tty->tty_files);
-	spin_unlock(&tty->files_lock);
 }
 
 /**
@@ -226,9 +225,8 @@ static void tty_del_file(struct file *file)
 	struct tty_file_private *priv = file->private_data;
 	struct tty_struct *tty = priv->tty;
 
-	spin_lock(&tty->files_lock);
-	list_del(&priv->list);
-	spin_unlock(&tty->files_lock);
+	scoped_guard(spinlock, &tty->files_lock)
+		list_del(&priv->list);
 	tty_free_file(file);
 }
 
@@ -620,15 +618,15 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 
 	tty_ldisc_hangup(tty, cons_filp != NULL);
 
-	spin_lock_irq(&tty->ctrl.lock);
-	clear_bit(TTY_THROTTLED, &tty->flags);
-	clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
-	put_pid(tty->ctrl.session);
-	put_pid(tty->ctrl.pgrp);
-	tty->ctrl.session = NULL;
-	tty->ctrl.pgrp = NULL;
-	tty->ctrl.pktstatus = 0;
-	spin_unlock_irq(&tty->ctrl.lock);
+	scoped_guard(spinlock_irq, &tty->ctrl.lock) {
+		clear_bit(TTY_THROTTLED, &tty->flags);
+		clear_bit(TTY_DO_WRITE_WAKEUP, &tty->flags);
+		put_pid(tty->ctrl.session);
+		put_pid(tty->ctrl.pgrp);
+		tty->ctrl.session = NULL;
+		tty->ctrl.pgrp = NULL;
+		tty->ctrl.pktstatus = 0;
+	}
 
 	/*
 	 * If one of the devices matches a console pointer, we
@@ -700,13 +698,8 @@ EXPORT_SYMBOL(tty_vhangup);
  */
 void tty_vhangup_self(void)
 {
-	struct tty_struct *tty;
-
-	tty = get_current_tty();
-	if (tty) {
-		tty_vhangup(tty);
-		tty_kref_put(tty);
-	}
+	scoped_guard(tty_current)
+		tty_vhangup(scoped_current_tty());
 }
 
 /**
@@ -1079,10 +1072,9 @@ ssize_t redirected_tty_write(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct file *p = NULL;
 
-	spin_lock(&redirect_lock);
-	if (redirect)
-		p = get_file(redirect);
-	spin_unlock(&redirect_lock);
+	scoped_guard(spinlock, &redirect_lock)
+		if (redirect)
+			p = get_file(redirect);
 
 	/*
 	 * We know the redirected tty is just another tty, we can
@@ -1497,9 +1489,8 @@ static void release_one_tty(struct work_struct *work)
 	tty_driver_kref_put(driver);
 	module_put(owner);
 
-	spin_lock(&tty->files_lock);
-	list_del_init(&tty->tty_files);
-	spin_unlock(&tty->files_lock);
+	scoped_guard(spinlock, &tty->files_lock)
+		list_del_init(&tty->tty_files);
 
 	put_pid(tty->ctrl.pgrp);
 	put_pid(tty->ctrl.session);
@@ -1639,10 +1630,9 @@ void tty_kclose(struct tty_struct *tty)
 	 * The release_tty function takes care of the details of clearing
 	 * the slots and preserving the termios structure.
 	 */
-	mutex_lock(&tty_mutex);
+	guard(mutex)(&tty_mutex);
 	tty_port_set_kopened(tty->port, 0);
 	release_tty(tty, tty->index);
-	mutex_unlock(&tty_mutex);
 }
 EXPORT_SYMBOL_GPL(tty_kclose);
 
@@ -1669,9 +1659,8 @@ void tty_release_struct(struct tty_struct *tty, int idx)
 	 * The release_tty function takes care of the details of clearing
 	 * the slots and preserving the termios structure.
 	 */
-	mutex_lock(&tty_mutex);
+	guard(mutex)(&tty_mutex);
 	release_tty(tty, idx);
-	mutex_unlock(&tty_mutex);
 }
 EXPORT_SYMBOL_GPL(tty_release_struct);
 
@@ -2184,7 +2173,6 @@ static __poll_t tty_poll(struct file *filp, poll_table *wait)
 static int __tty_fasync(int fd, struct file *filp, int on)
 {
 	struct tty_struct *tty = file_tty(filp);
-	unsigned long flags;
 	int retval = 0;
 
 	if (tty_paranoia_check(tty, file_inode(filp), "tty_fasync"))
@@ -2204,16 +2192,16 @@ static int __tty_fasync(int fd, struct file *filp, int on)
 		enum pid_type type;
 		struct pid *pid;
 
-		spin_lock_irqsave(&tty->ctrl.lock, flags);
-		if (tty->ctrl.pgrp) {
-			pid = tty->ctrl.pgrp;
-			type = PIDTYPE_PGID;
-		} else {
-			pid = task_pid(current);
-			type = PIDTYPE_TGID;
+		scoped_guard(spinlock_irqsave, &tty->ctrl.lock) {
+			if (tty->ctrl.pgrp) {
+				pid = tty->ctrl.pgrp;
+				type = PIDTYPE_PGID;
+			} else {
+				pid = task_pid(current);
+				type = PIDTYPE_TGID;
+			}
+			get_pid(pid);
 		}
-		get_pid(pid);
-		spin_unlock_irqrestore(&tty->ctrl.lock, flags);
 		__f_setown(filp, pid, type, 0);
 		put_pid(pid);
 		retval = 0;
@@ -2361,10 +2349,10 @@ static int tioccons(struct file *file)
 	if (file->f_op->write_iter == redirected_tty_write) {
 		struct file *f;
 
-		spin_lock(&redirect_lock);
-		f = redirect;
-		redirect = NULL;
-		spin_unlock(&redirect_lock);
+		scoped_guard(spinlock_irqsave, &redirect_lock) {
+			f = redirect;
+			redirect = NULL;
+		}
 		if (f)
 			fput(f);
 		return 0;
