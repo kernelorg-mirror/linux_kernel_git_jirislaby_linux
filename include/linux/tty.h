@@ -347,6 +347,7 @@ int __init tty_init(void);
 const char *tty_name(const struct tty_struct *tty);
 struct tty_struct *tty_kopen_exclusive(dev_t device);
 struct tty_struct *tty_kopen_shared(dev_t device);
+void tty_close(struct tty_struct *tty);
 void tty_kclose(struct tty_struct *tty);
 int tty_dev_name_to_number(const char *name, dev_t *number);
 #else

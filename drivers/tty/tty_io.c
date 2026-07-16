@@ -1608,6 +1608,15 @@ static int tty_release_checks(struct tty_struct *tty, int idx)
 	return 0;
 }
 
+void tty_close(struct tty_struct *tty)
+{
+	tty_lock(tty);
+	if (tty->ops->close)
+		tty->ops->close(tty, NULL);
+	tty_unlock(tty);
+}
+EXPORT_SYMBOL_GPL(tty_close);
+
 /**
  * tty_kclose - closes tty opened by tty_kopen
  * @tty: tty device
