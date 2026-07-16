@@ -57,14 +57,11 @@ static const struct tty_ldisc_ops *tty_ldiscs[NR_LDISCS];
  */
 int tty_register_ldisc(const struct tty_ldisc_ops *new_ldisc)
 {
-	unsigned long flags;
-
 	if (new_ldisc->num < N_TTY || new_ldisc->num >= NR_LDISCS)
 		return -EINVAL;
 
-	raw_spin_lock_irqsave(&tty_ldiscs_lock, flags);
+	guard(raw_spinlock_irqsave)(&tty_ldiscs_lock);
 	tty_ldiscs[new_ldisc->num] = new_ldisc;
-	raw_spin_unlock_irqrestore(&tty_ldiscs_lock, flags);
 
 	return 0;
 }
@@ -82,38 +79,30 @@ EXPORT_SYMBOL(tty_register_ldisc);
 
 void tty_unregister_ldisc(const struct tty_ldisc_ops *ldisc)
 {
-	unsigned long flags;
-
-	raw_spin_lock_irqsave(&tty_ldiscs_lock, flags);
+	guard(raw_spinlock_irqsave)(&tty_ldiscs_lock);
 	tty_ldiscs[ldisc->num] = NULL;
-	raw_spin_unlock_irqrestore(&tty_ldiscs_lock, flags);
 }
 EXPORT_SYMBOL(tty_unregister_ldisc);
 
 static const struct tty_ldisc_ops *get_ldops(int disc)
 {
-	unsigned long flags;
-	const struct tty_ldisc_ops *ldops, *ret;
+	const struct tty_ldisc_ops *ldops;
 
-	raw_spin_lock_irqsave(&tty_ldiscs_lock, flags);
-	ret = ERR_PTR(-EINVAL);
+	guard(raw_spinlock_irqsave)(&tty_ldiscs_lock);
 	ldops = tty_ldiscs[disc];
-	if (ldops) {
-		ret = ERR_PTR(-EAGAIN);
-		if (try_module_get(ldops->owner))
-			ret = ldops;
-	}
-	raw_spin_unlock_irqrestore(&tty_ldiscs_lock, flags);
-	return ret;
+	if (!ldops)
+		return ERR_PTR(-EINVAL);
+
+	if (!try_module_get(ldops->owner))
+		return ERR_PTR(-EAGAIN);
+
+	return ldops;
 }
 
 static void put_ldops(const struct tty_ldisc_ops *ldops)
 {
-	unsigned long flags;
-
-	raw_spin_lock_irqsave(&tty_ldiscs_lock, flags);
+	guard(raw_spinlock_irqsave)(&tty_ldiscs_lock);
 	module_put(ldops->owner);
-	raw_spin_unlock_irqrestore(&tty_ldiscs_lock, flags);
 }
 
 int tty_ldisc_autoload = IS_BUILTIN(CONFIG_LDISC_AUTOLOAD);
