@@ -3,6 +3,7 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
 
+#include <linux/cleanup.h>
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/signal.h>
@@ -32,38 +33,39 @@ static int is_ignored(int sig)
  */
 int __tty_check_change(struct tty_struct *tty, int sig)
 {
-	unsigned long flags;
 	struct pid *pgrp, *tty_pgrp;
-	int ret = 0;
 
 	if (current->signal->tty != tty)
 		return 0;
 
-	rcu_read_lock();
-	pgrp = task_pgrp(current);
+	scoped_guard(rcu) {
+		pgrp = task_pgrp(current);
 
-	spin_lock_irqsave(&tty->ctrl.lock, flags);
-	tty_pgrp = tty->ctrl.pgrp;
-	spin_unlock_irqrestore(&tty->ctrl.lock, flags);
+		scoped_guard(spinlock_irqsave, &tty->ctrl.lock)
+			tty_pgrp = tty->ctrl.pgrp;
 
-	if (tty_pgrp && pgrp != tty_pgrp) {
+		if (!tty_pgrp || pgrp == tty_pgrp)
+			break;
+
 		if (is_ignored(sig)) {
 			if (sig == SIGTTIN)
-				ret = -EIO;
-		} else if (is_current_pgrp_orphaned())
-			ret = -EIO;
-		else {
-			kill_pgrp(pgrp, sig, 1);
-			set_thread_flag(TIF_SIGPENDING);
-			ret = -ERESTARTSYS;
+				return -EIO;
+			return 0;
 		}
+
+		if (is_current_pgrp_orphaned())
+			return -EIO;
+
+		kill_pgrp(pgrp, sig, 1);
+		set_thread_flag(TIF_SIGPENDING);
+
+		return -ERESTARTSYS;
 	}
-	rcu_read_unlock();
 
 	if (!tty_pgrp)
 		tty_warn(tty, "sig=%d, tty->pgrp == NULL!\n", sig);
 
-	return ret;
+	return 0;
 }
 
 int tty_check_change(struct tty_struct *tty)
@@ -74,13 +76,12 @@ EXPORT_SYMBOL(tty_check_change);
 
 void proc_clear_tty(struct task_struct *p)
 {
-	unsigned long flags;
 	struct tty_struct *tty;
 
-	spin_lock_irqsave(&p->sighand->siglock, flags);
-	tty = p->signal->tty;
-	p->signal->tty = NULL;
-	spin_unlock_irqrestore(&p->sighand->siglock, flags);
+	scoped_guard(spinlock_irqsave, &p->sighand->siglock) {
+		tty = p->signal->tty;
+		p->signal->tty = NULL;
+	}
 	tty_kref_put(tty);
 }
 
@@ -97,18 +98,17 @@ void proc_clear_tty(struct task_struct *p)
  */
 static void __proc_set_tty(struct tty_struct *tty)
 {
-	unsigned long flags;
+	scoped_guard(spinlock_irqsave, &tty->ctrl.lock) {
+		/*
+		 * The session and fg pgrp references will be non-NULL if
+		 * tiocsctty() is stealing the controlling tty
+		 */
+		put_pid(tty->ctrl.session);
+		put_pid(tty->ctrl.pgrp);
+		tty->ctrl.pgrp = get_pid(task_pgrp(current));
+		tty->ctrl.session = get_pid(task_session(current));
+	}
 
-	spin_lock_irqsave(&tty->ctrl.lock, flags);
-	/*
-	 * The session and fg pgrp references will be non-NULL if
-	 * tiocsctty() is stealing the controlling tty
-	 */
-	put_pid(tty->ctrl.session);
-	put_pid(tty->ctrl.pgrp);
-	tty->ctrl.pgrp = get_pid(task_pgrp(current));
-	tty->ctrl.session = get_pid(task_session(current));
-	spin_unlock_irqrestore(&tty->ctrl.lock, flags);
 	if (current->signal->tty) {
 		tty_debug(tty, "current tty %s not NULL!!\n",
 			  current->signal->tty->name);
@@ -121,9 +121,8 @@ static void __proc_set_tty(struct tty_struct *tty)
 
 static void proc_set_tty(struct tty_struct *tty)
 {
-	spin_lock_irq(&current->sighand->siglock);
+	guard(spinlock_irq)(&current->sighand->siglock);
 	__proc_set_tty(tty);
-	spin_unlock_irq(&current->sighand->siglock);
 }
 
 /*
@@ -131,8 +130,9 @@ static void proc_set_tty(struct tty_struct *tty)
  */
 void tty_open_proc_set_tty(struct file *filp, struct tty_struct *tty)
 {
-	read_lock(&tasklist_lock);
-	spin_lock_irq(&current->sighand->siglock);
+	guard(read_lock)(&tasklist_lock);
+	guard(spinlock_irq)(&current->sighand->siglock);
+
 	if (current->signal->leader &&
 	    !current->signal->tty &&
 	    tty->ctrl.session == NULL) {
@@ -153,19 +153,12 @@ void tty_open_proc_set_tty(struct file *filp, struct tty_struct *tty)
 		if (filp->f_mode & FMODE_READ)
 			__proc_set_tty(tty);
 	}
-	spin_unlock_irq(&current->sighand->siglock);
-	read_unlock(&tasklist_lock);
 }
 
 struct tty_struct *get_current_tty(void)
 {
-	struct tty_struct *tty;
-	unsigned long flags;
-
-	spin_lock_irqsave(&current->sighand->siglock, flags);
-	tty = tty_kref_get(current->signal->tty);
-	spin_unlock_irqrestore(&current->sighand->siglock, flags);
-	return tty;
+	guard(spinlock_irqsave)(&current->sighand->siglock);
+	return tty_kref_get(current->signal->tty);
 }
 EXPORT_SYMBOL_GPL(get_current_tty);
 
@@ -202,7 +195,8 @@ int tty_signal_session_leader(struct tty_struct *tty, int exit_session)
 	read_lock(&tasklist_lock);
 	if (tty->ctrl.session) {
 		do_each_pid_task(tty->ctrl.session, PIDTYPE_SID, p) {
-			spin_lock_irq(&p->sighand->siglock);
+			guard(spinlock_irq)(&p->sighand->siglock);
+
 			if (p->signal->tty == tty) {
 				p->signal->tty = NULL;
 				/*
@@ -218,13 +212,13 @@ int tty_signal_session_leader(struct tty_struct *tty, int exit_session)
 			send_signal_locked(SIGHUP, SEND_SIG_PRIV, p, PIDTYPE_TGID);
 			send_signal_locked(SIGCONT, SEND_SIG_PRIV, p, PIDTYPE_TGID);
 			put_pid(p->signal->tty_old_pgrp);  /* A noop */
-			spin_lock(&tty->ctrl.lock);
+
+			guard(spinlock)(&tty->ctrl.lock);
+
 			tty_pgrp = get_pid(tty->ctrl.pgrp);
 			if (tty->ctrl.pgrp)
 				p->signal->tty_old_pgrp =
 					get_pid(tty->ctrl.pgrp);
-			spin_unlock(&tty->ctrl.lock);
-			spin_unlock_irq(&p->sighand->siglock);
 		} while_each_pid_task(tty->ctrl.session, PIDTYPE_SID, p);
 	}
 	read_unlock(&tasklist_lock);
@@ -264,13 +258,13 @@ int tty_signal_session_leader(struct tty_struct *tty, int exit_session)
  */
 void disassociate_ctty(int on_exit)
 {
-	struct tty_struct *tty;
-
 	if (!current->signal->leader)
 		return;
 
-	tty = get_current_tty();
-	if (tty) {
+	bool has_tty = false;
+	scoped_guard(tty_current) {
+		has_tty = true;
+		struct tty_struct *tty = scoped_current_tty();
 		if (on_exit && tty->driver->type != TTY_DRIVER_TYPE_PTY) {
 			tty_vhangup_session(tty);
 		} else {
@@ -283,15 +277,16 @@ void disassociate_ctty(int on_exit)
 				put_pid(tty_pgrp);
 			}
 		}
-		tty_kref_put(tty);
+	}
 
-	} else if (on_exit) {
+	if (!has_tty && on_exit) {
 		struct pid *old_pgrp;
 
-		spin_lock_irq(&current->sighand->siglock);
-		old_pgrp = current->signal->tty_old_pgrp;
-		current->signal->tty_old_pgrp = NULL;
-		spin_unlock_irq(&current->sighand->siglock);
+		scoped_guard(spinlock_irq, &current->sighand->siglock) {
+			old_pgrp = current->signal->tty_old_pgrp;
+			current->signal->tty_old_pgrp = NULL;
+		}
+
 		if (old_pgrp) {
 			kill_pgrp(old_pgrp, SIGHUP, on_exit);
 			kill_pgrp(old_pgrp, SIGCONT, on_exit);
@@ -300,19 +295,15 @@ void disassociate_ctty(int on_exit)
 		return;
 	}
 
-	tty = get_current_tty();
-	if (tty) {
-		unsigned long flags;
+	scoped_guard(tty_current) {
+		struct tty_struct *tty = scoped_current_tty();
 
-		tty_lock_no_ref(tty);
-		spin_lock_irqsave(&tty->ctrl.lock, flags);
+		guard(tty_no_ref)(tty);
+		guard(spinlock_irqsave)(&tty->ctrl.lock);
 		put_pid(tty->ctrl.session);
 		put_pid(tty->ctrl.pgrp);
 		tty->ctrl.session = NULL;
 		tty->ctrl.pgrp = NULL;
-		spin_unlock_irqrestore(&tty->ctrl.lock, flags);
-		tty_unlock_no_ref(tty);
-		tty_kref_put(tty);
 	}
 
 	/* If tty->ctrl.pgrp is not NULL, it may be assigned to
@@ -320,15 +311,14 @@ void disassociate_ctty(int on_exit)
 	 * cause pid memleak. Release current->signal->tty_old_pgrp
 	 * after tty->ctrl.pgrp set to NULL.
 	 */
-	spin_lock_irq(&current->sighand->siglock);
-	put_pid(current->signal->tty_old_pgrp);
-	current->signal->tty_old_pgrp = NULL;
-	spin_unlock_irq(&current->sighand->siglock);
+	scoped_guard(spinlock_irq, &current->sighand->siglock) {
+		put_pid(current->signal->tty_old_pgrp);
+		current->signal->tty_old_pgrp = NULL;
+	}
 
 	/* Now clear signal->tty under the lock */
-	read_lock(&tasklist_lock);
+	guard(read_lock)(&tasklist_lock);
 	session_clear_tty(task_session(current));
-	read_unlock(&tasklist_lock);
 }
 
 /*
@@ -364,23 +354,18 @@ void no_tty(void)
  */
 static int tiocsctty(struct tty_struct *tty, struct file *file, int arg)
 {
-	int ret = 0;
+	guard(tty_no_ref)(tty);
+	guard(read_lock)(&tasklist_lock);
 
-	tty_lock_no_ref(tty);
-	read_lock(&tasklist_lock);
-
-	if (current->signal->leader &&
-			task_session(current) == tty->ctrl.session)
-		goto unlock;
+	if (current->signal->leader && task_session(current) == tty->ctrl.session)
+		return 0;
 
 	/*
 	 * The process must be a session leader and
 	 * not have a controlling tty already.
 	 */
-	if (!current->signal->leader || current->signal->tty) {
-		ret = -EPERM;
-		goto unlock;
-	}
+	if (!current->signal->leader || current->signal->tty)
+		return -EPERM;
 
 	if (tty->ctrl.session) {
 		/*
@@ -393,22 +378,17 @@ static int tiocsctty(struct tty_struct *tty, struct file *file, int arg)
 			 */
 			session_clear_tty(tty->ctrl.session);
 		} else {
-			ret = -EPERM;
-			goto unlock;
+			return -EPERM;
 		}
 	}
 
 	/* See the comment in tty_open_proc_set_tty(). */
-	if ((file->f_mode & FMODE_READ) == 0 && !capable(CAP_SYS_ADMIN)) {
-		ret = -EPERM;
-		goto unlock;
-	}
+	if ((file->f_mode & FMODE_READ) == 0 && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
 
 	proc_set_tty(tty);
-unlock:
-	read_unlock(&tasklist_lock);
-	tty_unlock(tty);
-	return ret;
+
+	return 0;
 }
 
 /**
@@ -420,14 +400,8 @@ unlock:
  */
 struct pid *tty_get_pgrp(struct tty_struct *tty)
 {
-	unsigned long flags;
-	struct pid *pgrp;
-
-	spin_lock_irqsave(&tty->ctrl.lock, flags);
-	pgrp = get_pid(tty->ctrl.pgrp);
-	spin_unlock_irqrestore(&tty->ctrl.lock, flags);
-
-	return pgrp;
+	guard(spinlock_irqsave)(&tty->ctrl.lock);
+	return get_pid(tty->ctrl.pgrp);
 }
 EXPORT_SYMBOL_GPL(tty_get_pgrp);
 
