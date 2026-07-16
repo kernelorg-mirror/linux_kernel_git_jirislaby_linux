@@ -894,7 +894,8 @@ static int get_serial_info(struct tty_struct *tty, struct serial_struct *ss)
 	struct serial_state *state = tty->driver_data;
 	unsigned int close_delay, closing_wait;
 
-	tty_lock(tty);
+	guard(mutex)(&state->tport.mutex);
+
 	close_delay = jiffies_to_msecs(state->tport.close_delay) / 10;
 	closing_wait = state->tport.closing_wait;
 	if (closing_wait != ASYNC_CLOSING_WAIT_NONE)
@@ -908,7 +909,7 @@ static int get_serial_info(struct tty_struct *tty, struct serial_struct *ss)
 	ss->close_delay = close_delay;
 	ss->closing_wait = closing_wait;
 	ss->custom_divisor = state->custom_divisor;
-	tty_unlock(tty);
+
 	return 0;
 }
 
@@ -917,17 +918,14 @@ static int set_serial_info(struct tty_struct *tty, struct serial_struct *ss)
 	struct serial_state *state = tty->driver_data;
 	struct tty_port *port = &state->tport;
 	bool change_spd;
-	int 			retval = 0;
 	unsigned int close_delay, closing_wait;
 
-	tty_lock(tty);
+	guard(mutex)(&state->tport.mutex);
+
 	change_spd = ((ss->flags ^ port->flags) & ASYNC_SPD_MASK) ||
 		ss->custom_divisor != state->custom_divisor;
-	if (ss->irq || ss->port != state->port ||
-			ss->xmit_fifo_size != XMIT_FIFO_SIZE) {
-		tty_unlock(tty);
+	if (ss->irq || ss->port != state->port || ss->xmit_fifo_size != XMIT_FIFO_SIZE)
 		return -EINVAL;
-	}
 
 	close_delay = msecs_to_jiffies(ss->close_delay * 10);
 	closing_wait = ss->closing_wait;
@@ -938,21 +936,17 @@ static int set_serial_info(struct tty_struct *tty, struct serial_struct *ss)
 		if ((ss->baud_base != state->baud_base) ||
 		    (close_delay != port->close_delay) ||
 		    (closing_wait != port->closing_wait) ||
-		    ((ss->flags & ~ASYNC_USR_MASK) !=
-		     (port->flags & ~ASYNC_USR_MASK))) {
-			tty_unlock(tty);
+		    ((ss->flags & ~ASYNC_USR_MASK) != (port->flags & ~ASYNC_USR_MASK)))
 			return -EPERM;
-		}
+
 		port->flags = ((port->flags & ~ASYNC_USR_MASK) |
 			       (ss->flags & ASYNC_USR_MASK));
 		state->custom_divisor = ss->custom_divisor;
 		goto check_and_exit;
 	}
 
-	if (ss->baud_base < 9600) {
-		tty_unlock(tty);
+	if (ss->baud_base < 9600)
 		return -EINVAL;
-	}
 
 	/*
 	 * OK, past this point, all the error checking has been done.
@@ -974,10 +968,11 @@ check_and_exit:
 				dev_warn_ratelimited(tty->dev, "use of SPD flags is deprecated\n");
 			change_speed(tty, state, NULL);
 		}
-	} else
-		retval = rs_startup(tty, state);
-	tty_unlock(tty);
-	return retval;
+		return 0;
+	}
+
+	return rs_startup(tty, state);
+
 }
 
 /*
