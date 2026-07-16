@@ -1641,6 +1641,26 @@ void tty_kclose(struct tty_struct *tty)
 EXPORT_SYMBOL_GPL(tty_kclose);
 
 /**
+ * tty_close - closes a tty's underlying device
+ * @tty: tty device
+ *
+ * Calls tty->ops->close() while holding the tty lock, so that callers don't
+ * have to take tty_lock()/tty_unlock() themselves.
+ *
+ * This is the first step of tearing down a tty obtained by tty_init_dev() or
+ * tty_kopen_exclusive()/tty_kopen_shared(); it is to be followed by
+ * tty_release_struct() or tty_kclose(), respectively.
+ */
+void tty_close(struct tty_struct *tty)
+{
+	tty_lock(tty);
+	if (tty->ops->close)
+		tty->ops->close(tty, NULL);
+	tty_unlock(tty);
+}
+EXPORT_SYMBOL_GPL(tty_close);
+
+/**
  * tty_release_struct - release a tty struct
  * @tty: tty device
  * @idx: index of the tty
