@@ -17,17 +17,6 @@ void tty_lock(struct tty_struct *tty)
 	tty_kref_get(tty);
 	tty_lock_no_ref(tty);
 }
-EXPORT_SYMBOL(tty_lock);
-
-int tty_lock_interruptible(struct tty_struct *tty)
-{
-	tty_kref_get(tty);
-
-	int ret = tty_lock_interruptible_no_ref(tty);
-	if (ret)
-		tty_kref_put(tty);
-	return ret;
-}
 
 void tty_unlock(struct tty_struct *tty)
 {
