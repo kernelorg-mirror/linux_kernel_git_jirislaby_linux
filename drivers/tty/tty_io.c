@@ -2173,41 +2173,38 @@ static __poll_t tty_poll(struct file *filp, poll_table *wait)
 static int __tty_fasync(int fd, struct file *filp, int on)
 {
 	struct tty_struct *tty = file_tty(filp);
-	int retval = 0;
+	int retval;
 
 	if (tty_paranoia_check(tty, file_inode(filp), "tty_fasync"))
-		goto out;
+		return 0;
 
 	if (on) {
 		retval = file_f_owner_allocate(filp);
 		if (retval)
-			goto out;
+			return retval;
 	}
 
 	retval = fasync_helper(fd, filp, on, &tty->fasync);
-	if (retval <= 0)
-		goto out;
+	if (!on || retval <= 0)
+		return retval;
 
-	if (on) {
-		enum pid_type type;
-		struct pid *pid;
+	enum pid_type type;
+	struct pid *pid;
 
-		scoped_guard(spinlock_irqsave, &tty->ctrl.lock) {
-			if (tty->ctrl.pgrp) {
-				pid = tty->ctrl.pgrp;
-				type = PIDTYPE_PGID;
-			} else {
-				pid = task_pid(current);
-				type = PIDTYPE_TGID;
-			}
-			get_pid(pid);
+	scoped_guard(spinlock_irqsave, &tty->ctrl.lock) {
+		if (tty->ctrl.pgrp) {
+			pid = tty->ctrl.pgrp;
+			type = PIDTYPE_PGID;
+		} else {
+			pid = task_pid(current);
+			type = PIDTYPE_TGID;
 		}
-		__f_setown(filp, pid, type, 0);
-		put_pid(pid);
-		retval = 0;
+		get_pid(pid);
 	}
-out:
-	return retval;
+	__f_setown(filp, pid, type, 0);
+	put_pid(pid);
+
+	return 0;
 }
 
 static int tty_fasync(int fd, struct file *filp, int on)
