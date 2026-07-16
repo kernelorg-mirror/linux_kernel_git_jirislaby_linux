@@ -523,7 +523,6 @@ DEFINE_LOCK_GUARD_1(tty_no_ref, struct tty_struct, tty_lock_no_ref(_T->lock),
 		    tty_unlock_no_ref(_T->lock));
 
 void tty_lock(struct tty_struct *tty);
-int  tty_lock_interruptible(struct tty_struct *tty);
 void tty_unlock(struct tty_struct *tty);
 void tty_lock_slave(struct tty_struct *tty);
 void tty_unlock_slave(struct tty_struct *tty);
