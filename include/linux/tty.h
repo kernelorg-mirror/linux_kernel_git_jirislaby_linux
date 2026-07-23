@@ -2,6 +2,7 @@
 #ifndef _LINUX_TTY_H
 #define _LINUX_TTY_H
 
+#include <linux/cleanup.h>
 #include <linux/fs.h>
 #include <linux/major.h>
 #include <linux/termios.h>
@@ -502,6 +503,25 @@ long vt_compat_ioctl(struct tty_struct *tty, unsigned int cmd,
 
 /* tty_mutex.c */
 /* functions for preparation of BKL removal */
+
+static inline void tty_lock_no_ref(struct tty_struct *tty)
+{
+	mutex_lock(&tty->legacy_mutex);
+}
+
+static inline int __must_check tty_lock_interruptible_no_ref(struct tty_struct *tty)
+{
+	return mutex_lock_interruptible(&tty->legacy_mutex);
+}
+
+static inline void tty_unlock_no_ref(struct tty_struct *tty)
+{
+	mutex_unlock(&tty->legacy_mutex);
+}
+
+DEFINE_LOCK_GUARD_1(tty_no_ref, struct tty_struct, tty_lock_no_ref(_T->lock),
+		    tty_unlock_no_ref(_T->lock));
+
 void tty_lock(struct tty_struct *tty);
 int  tty_lock_interruptible(struct tty_struct *tty);
 void tty_unlock(struct tty_struct *tty);
