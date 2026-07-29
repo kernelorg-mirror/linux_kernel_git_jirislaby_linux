@@ -304,14 +304,14 @@ void disassociate_ctty(int on_exit)
 	if (tty) {
 		unsigned long flags;
 
-		tty_lock(tty);
+		tty_lock_no_ref(tty);
 		spin_lock_irqsave(&tty->ctrl.lock, flags);
 		put_pid(tty->ctrl.session);
 		put_pid(tty->ctrl.pgrp);
 		tty->ctrl.session = NULL;
 		tty->ctrl.pgrp = NULL;
 		spin_unlock_irqrestore(&tty->ctrl.lock, flags);
-		tty_unlock(tty);
+		tty_unlock_no_ref(tty);
 		tty_kref_put(tty);
 	}
 
@@ -366,7 +366,7 @@ static int tiocsctty(struct tty_struct *tty, struct file *file, int arg)
 {
 	int ret = 0;
 
-	tty_lock(tty);
+	tty_lock_no_ref(tty);
 	read_lock(&tasklist_lock);
 
 	if (current->signal->leader &&

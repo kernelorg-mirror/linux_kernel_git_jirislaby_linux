@@ -578,10 +578,10 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 
 	f = tty_release_redirect(tty);
 
-	tty_lock(tty);
+	tty_lock_no_ref(tty);
 
 	if (test_bit(TTY_HUPPED, &tty->flags)) {
-		tty_unlock(tty);
+		tty_unlock_no_ref(tty);
 		return;
 	}
 
@@ -651,7 +651,7 @@ static void __tty_hangup(struct tty_struct *tty, int exit_session)
 	 */
 	set_bit(TTY_HUPPED, &tty->flags);
 	clear_bit(TTY_HUPPING, &tty->flags);
-	tty_unlock(tty);
+	tty_unlock_no_ref(tty);
 
 	if (f)
 		fput(f);
@@ -1612,10 +1612,9 @@ static int tty_release_checks(struct tty_struct *tty, int idx)
 
 void tty_close(struct tty_struct *tty)
 {
-	tty_lock(tty);
+	guard(tty_no_ref)(tty);
 	if (tty->ops->close)
 		tty->ops->close(tty, NULL);
-	tty_unlock(tty);
 }
 EXPORT_SYMBOL_GPL(tty_close);
 
@@ -1708,7 +1707,7 @@ int tty_release(struct inode *inode, struct file *filp)
 	if (tty_paranoia_check(tty, inode, __func__))
 		return 0;
 
-	tty_lock(tty);
+	tty_lock_no_ref(tty);
 	check_tty_count(tty, __func__);
 
 	__tty_fasync(-1, filp, 0);
@@ -1719,7 +1718,7 @@ int tty_release(struct inode *inode, struct file *filp)
 		o_tty = tty->link;
 
 	if (tty_release_checks(tty, idx)) {
-		tty_unlock(tty);
+		tty_unlock_no_ref(tty);
 		return 0;
 	}
 
@@ -1822,7 +1821,7 @@ int tty_release(struct inode *inode, struct file *filp)
 	final = !tty->count && !(o_tty && o_tty->count);
 
 	tty_unlock_slave(o_tty);
-	tty_unlock(tty);
+	tty_unlock_no_ref(tty);
 
 	/* At this point, the tty->count == 0 should ensure a dead tty
 	 * cannot be re-opened by a racing opener.
@@ -1862,8 +1861,7 @@ static struct tty_struct *tty_open_current_tty(dev_t device, struct file *filp)
 
 	filp->f_flags |= O_NONBLOCK; /* Don't let /dev/tty block */
 	/* noctty = 1; */
-	tty_lock(tty);
-	tty_kref_put(tty);	/* safe to drop the kref now */
+	tty_lock_no_ref(tty);
 
 	retval = tty_reopen(tty);
 	if (retval < 0) {
@@ -2040,8 +2038,7 @@ static struct tty_struct *tty_open_by_driver(dev_t device,
 			goto out;
 		}
 		mutex_unlock(&tty_mutex);
-		retval = tty_lock_interruptible(tty);
-		tty_kref_put(tty);  /* drop kref from tty_driver_lookup_tty() */
+		retval = tty_lock_interruptible_no_ref(tty);
 		if (retval) {
 			if (retval == -EINTR)
 				retval = -ERESTARTSYS;
@@ -2050,7 +2047,8 @@ static struct tty_struct *tty_open_by_driver(dev_t device,
 		}
 		retval = tty_reopen(tty);
 		if (retval < 0) {
-			tty_unlock(tty);
+			tty_unlock_no_ref(tty);
+			tty_kref_put(tty);
 			tty = ERR_PTR(retval);
 		}
 	} else { /* Returns with the tty_lock held for now */
@@ -2228,15 +2226,12 @@ out:
 
 static int tty_fasync(int fd, struct file *filp, int on)
 {
-	struct tty_struct *tty = file_tty(filp);
-	int retval = -ENOTTY;
+	guard(tty_no_ref)(file_tty(filp));
 
-	tty_lock(tty);
-	if (!tty_hung_up_p(filp))
-		retval = __tty_fasync(fd, filp, on);
-	tty_unlock(tty);
+	if (tty_hung_up_p(filp))
+		return -ENOTTY;
 
-	return retval;
+	return __tty_fasync(fd, filp, on);
 }
 
 static bool tty_legacy_tiocsti __read_mostly = IS_ENABLED(CONFIG_LEGACY_TIOCSTI);
