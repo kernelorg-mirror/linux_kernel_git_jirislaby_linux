@@ -562,9 +562,9 @@ int tty_port_block_til_ready(struct tty_port *port,
 			retval = -ERESTARTSYS;
 			break;
 		}
-		tty_unlock(tty);
+		tty_unlock_no_ref(tty);
 		schedule();
-		tty_lock(tty);
+		tty_lock_no_ref(tty);
 	}
 	finish_wait(&port->open_wait, &wait);
 
