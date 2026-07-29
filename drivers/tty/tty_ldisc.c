@@ -525,7 +525,7 @@ int tty_set_ldisc(struct tty_struct *tty, int disc)
 	if (IS_ERR(new_ldisc))
 		return PTR_ERR(new_ldisc);
 
-	tty_lock(tty);
+	tty_lock_no_ref(tty);
 	retval = tty_ldisc_lock(tty, 5 * HZ);
 	if (retval)
 		goto err;
@@ -591,7 +591,7 @@ out:
 	tty_buffer_restart_work(tty->port);
 err:
 	tty_ldisc_put(new_ldisc);	/* drop the extra reference */
-	tty_unlock(tty);
+	tty_unlock_no_ref(tty);
 	return retval;
 }
 EXPORT_SYMBOL_GPL(tty_set_ldisc);
