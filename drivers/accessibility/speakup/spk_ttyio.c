@@ -361,7 +361,6 @@ void spk_ttyio_release(struct spk_synth *in_synth)
 	if (tty->ops->close)
 		tty->ops->close(tty, NULL);
 
-	tty_ldisc_flush(tty);
 	tty_unlock(tty);
 	tty_kclose(tty);
 
