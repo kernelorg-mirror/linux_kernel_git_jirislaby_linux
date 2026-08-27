@@ -8,6 +8,7 @@
  * Copyright 2009-2010 Canonical Ltd.
  */
 
+#include <linux/cleanup.h>
 #include <linux/tty.h>
 #include <linux/fdtable.h>
 #include <linux/file.h>
@@ -679,28 +680,25 @@ done:
 
 static void revalidate_tty(const struct cred *subj_cred, struct aa_label *label)
 {
-	struct tty_struct *tty;
-	int drop_tty = 0;
+	bool drop_tty = false;
 
-	tty = get_current_tty();
-	if (!tty)
-		return;
+	scoped_guard(tty_current) {
+		struct tty_struct *tty = scoped_current_tty();
 
-	spin_lock(&tty->files_lock);
-	if (!list_empty(&tty->tty_files)) {
-		struct tty_file_private *file_priv;
-		struct file *file;
-		/* TODO: Revalidate access to controlling tty. */
-		file_priv = list_first_entry(&tty->tty_files,
-					     struct tty_file_private, list);
-		file = file_priv->file;
+		guard(spinlock)(&tty->files_lock);
+		if (!list_empty(&tty->tty_files)) {
+			struct tty_file_private *file_priv;
+			struct file *file;
+			/* TODO: Revalidate access to controlling tty. */
+			file_priv = list_first_entry(&tty->tty_files,
+						     struct tty_file_private, list);
+			file = file_priv->file;
 
-		if (aa_file_perm(OP_INHERIT, subj_cred, label, file,
-				 MAY_READ | MAY_WRITE, IN_ATOMIC))
-			drop_tty = 1;
+			if (aa_file_perm(OP_INHERIT, subj_cred, label, file,
+					 MAY_READ | MAY_WRITE, IN_ATOMIC))
+				drop_tty = true;
+		}
 	}
-	spin_unlock(&tty->files_lock);
-	tty_kref_put(tty);
 
 	if (drop_tty)
 		no_tty();
