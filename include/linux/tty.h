@@ -379,6 +379,17 @@ static inline int tty_dev_name_to_number(const char *name, dev_t *number)
 { return -ENOTSUPP; }
 #endif
 
+__DEFINE_CLASS_IS_CONDITIONAL(tty_current, true);
+__DEFINE_UNLOCK_GUARD(tty_current, struct tty_struct, tty_kref_put(_T->lock));
+static inline class_tty_current_t class_tty_current_constructor(void)
+{
+        class_tty_current_t _t = {
+                .lock = get_current_tty(),
+        };
+        return _t;
+}
+#define scoped_current_tty()	((struct tty_struct *)(__guard_ptr(tty_current)(&scope)))
+
 extern struct ktermios tty_std_termios;
 
 int vcs_init(void);
