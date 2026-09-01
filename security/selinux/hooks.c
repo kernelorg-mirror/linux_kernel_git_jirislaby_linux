@@ -21,6 +21,7 @@
  *  Copyright (C) 2016 Mellanox Technologies
  */
 
+#include <linux/cleanup.h>
 #include <linux/init.h>
 #include <linux/kd.h>
 #include <linux/kernel.h>
@@ -2469,30 +2470,30 @@ static inline void flush_unauthorized_files(const struct cred *cred,
 					    struct files_struct *files)
 {
 	struct file *file, *devnull = NULL;
-	struct tty_struct *tty;
-	int drop_tty = 0;
+	bool drop_tty = false;
 	unsigned n;
 
-	tty = get_current_tty();
-	if (tty) {
-		spin_lock(&tty->files_lock);
-		if (!list_empty(&tty->tty_files)) {
-			struct tty_file_private *file_priv;
+	scoped_guard(tty_current) {
+		struct tty_struct *tty = scoped_current_tty();
 
-			/* Revalidate access to controlling tty.
-			   Use file_path_has_perm on the tty path directly
-			   rather than using file_has_perm, as this particular
-			   open file may belong to another process and we are
-			   only interested in the inode-based check here. */
-			file_priv = list_first_entry(&tty->tty_files,
-						struct tty_file_private, list);
-			file = file_priv->file;
-			if (file_path_has_perm(cred, file, FILE__READ | FILE__WRITE))
-				drop_tty = 1;
-		}
-		spin_unlock(&tty->files_lock);
-		tty_kref_put(tty);
+		guard(spinlock)(&tty->files_lock);
+
+		if (list_empty(&tty->tty_files))
+			break;
+
+		struct tty_file_private *file_priv;
+
+		/* Revalidate access to controlling tty.
+		   Use file_path_has_perm on the tty path directly
+		   rather than using file_has_perm, as this particular
+		   open file may belong to another process and we are
+		   only interested in the inode-based check here. */
+		file_priv = list_first_entry(&tty->tty_files, struct tty_file_private, list);
+		file = file_priv->file;
+		if (file_path_has_perm(cred, file, FILE__READ | FILE__WRITE))
+			drop_tty = true;
 	}
+
 	/* Reset controlling tty. */
 	if (drop_tty)
 		no_tty();
