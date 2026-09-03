@@ -111,40 +111,37 @@ static DECLARE_WAIT_QUEUE_HEAD(vt_event_waitqueue);
 void vt_event_post(unsigned int event, unsigned int old, unsigned int new)
 {
 	struct list_head *pos, *head;
-	unsigned long flags;
-	int wake = 0;
+	bool wake = false;
 
-	spin_lock_irqsave(&vt_event_lock, flags);
-	head = &vt_events;
+	scoped_guard(spinlock_irqsave, &vt_event_lock) {
+		head = &vt_events;
 
-	list_for_each(pos, head) {
-		struct vt_event_wait *ve = list_entry(pos,
-						struct vt_event_wait, list);
-		if (!(ve->event.event & event))
-			continue;
-		ve->event.event = event;
-		/* kernel view is consoles 0..n-1, user space view is
-		   console 1..n with 0 meaning current, so we must bias */
-		ve->event.oldev = old + 1;
-		ve->event.newev = new + 1;
-		wake = 1;
-		ve->done = 1;
+		list_for_each(pos, head) {
+			struct vt_event_wait *ve = list_entry(pos, struct vt_event_wait, list);
+			if (!(ve->event.event & event))
+				continue;
+			ve->event.event = event;
+			/* kernel view is consoles 0..n-1, user space view is
+			   console 1..n with 0 meaning current, so we must bias */
+			ve->event.oldev = old + 1;
+			ve->event.newev = new + 1;
+			wake = true;
+			ve->done = 1;
+		}
 	}
-	spin_unlock_irqrestore(&vt_event_lock, flags);
+
 	if (wake)
 		wake_up_interruptible(&vt_event_waitqueue);
 }
 
 static void __vt_event_queue(struct vt_event_wait *vw)
 {
-	unsigned long flags;
 	/* Prepare the event */
 	INIT_LIST_HEAD(&vw->list);
 	vw->done = 0;
 	/* Queue our event */
-	spin_lock_irqsave(&vt_event_lock, flags);
+	guard(spinlock_irqsave)(&vt_event_lock);
 	list_add(&vw->list, &vt_events);
-	spin_unlock_irqrestore(&vt_event_lock, flags);
 }
 
 static void __vt_event_wait(struct vt_event_wait *vw)
@@ -155,12 +152,9 @@ static void __vt_event_wait(struct vt_event_wait *vw)
 
 static void __vt_event_dequeue(struct vt_event_wait *vw)
 {
-	unsigned long flags;
-
 	/* Dequeue it */
-	spin_lock_irqsave(&vt_event_lock, flags);
+	guard(spinlock_irqsave)(&vt_event_lock);
 	list_del(&vw->list);
-	spin_unlock_irqrestore(&vt_event_lock, flags);
 }
 
 /**
@@ -457,11 +451,11 @@ static int vt_k_ioctl(struct tty_struct *tty, unsigned int cmd,
 		if (!valid_signal(arg) || arg < 1 || arg == SIGKILL)
 			return -EINVAL;
 
-		spin_lock_irq(&vt_spawn_con.lock);
-		put_pid(vt_spawn_con.pid);
-		vt_spawn_con.pid = get_pid(task_pid(current));
-		vt_spawn_con.sig = arg;
-		spin_unlock_irq(&vt_spawn_con.lock);
+		scoped_guard(spinlock_irq, &vt_spawn_con.lock) {
+			put_pid(vt_spawn_con.pid);
+			vt_spawn_con.pid = get_pid(task_pid(current));
+			vt_spawn_con.sig = arg;
+		}
 		break;
 
 	case KDFONTOP: {
