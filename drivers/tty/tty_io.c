@@ -65,6 +65,7 @@
  *			 -- Andrew Morton <andrewm@uow.edu.eu> 17Mar01
  */
 
+#include <linux/cleanup.h>
 #include <linux/types.h>
 #include <linux/major.h>
 #include <linux/errno.h>
@@ -1916,33 +1917,34 @@ static struct tty_struct *tty_kopen(dev_t device, int shared)
 {
 	struct tty_struct *tty;
 	struct tty_driver *driver;
-	int index = -1;
 
-	mutex_lock(&tty_mutex);
-	driver = tty_lookup_driver(device, NULL, &index);
-	if (IS_ERR(driver)) {
-		mutex_unlock(&tty_mutex);
-		return ERR_CAST(driver);
+	scoped_guard(mutex, &tty_mutex) {
+		int index = -1;
+
+		driver = tty_lookup_driver(device, NULL, &index);
+		if (IS_ERR(driver)) {
+			return ERR_CAST(driver);
+		}
+
+		/* check whether we're reopening an existing tty */
+		tty = tty_driver_lookup_tty(driver, NULL, index);
+		if (IS_ERR(tty) || shared)
+			break;
+
+		if (tty) {
+			/* drop kref from tty_driver_lookup_tty() */
+			tty_kref_put(tty);
+			tty = ERR_PTR(-EBUSY);
+		} else { /* tty_init_dev returns tty with the tty_lock held */
+			tty = tty_init_dev(driver, index);
+			if (IS_ERR(tty))
+				break;
+			tty_port_set_kopened(tty->port, 1);
+		}
 	}
 
-	/* check whether we're reopening an existing tty */
-	tty = tty_driver_lookup_tty(driver, NULL, index);
-	if (IS_ERR(tty) || shared)
-		goto out;
-
-	if (tty) {
-		/* drop kref from tty_driver_lookup_tty() */
-		tty_kref_put(tty);
-		tty = ERR_PTR(-EBUSY);
-	} else { /* tty_init_dev returns tty with the tty_lock held */
-		tty = tty_init_dev(driver, index);
-		if (IS_ERR(tty))
-			goto out;
-		tty_port_set_kopened(tty->port, 1);
-	}
-out:
-	mutex_unlock(&tty_mutex);
 	tty_driver_kref_put(driver);
+
 	return tty;
 }
 
