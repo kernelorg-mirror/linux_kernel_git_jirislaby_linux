@@ -3,6 +3,7 @@
  * Tty buffer allocation management
  */
 
+#include "linux/cleanup.h"
 #include <linux/types.h>
 #include <linux/errno.h>
 #include <linux/minmax.h>
@@ -233,7 +234,7 @@ void tty_buffer_flush(struct tty_struct *tty, struct tty_ldisc *ld)
 
 	atomic_inc(&buf->priority);
 
-	mutex_lock(&buf->lock);
+	guard(mutex)(&buf->lock);
 	/* paired w/ release in __tty_buffer_request_room; ensures there are
 	 * no pending memory accesses to the freed buffer
 	 */
@@ -248,7 +249,6 @@ void tty_buffer_flush(struct tty_struct *tty, struct tty_ldisc *ld)
 		ld->ops->flush_buffer(tty);
 
 	atomic_dec(&buf->priority);
-	mutex_unlock(&buf->lock);
 }
 
 /**
@@ -471,7 +471,7 @@ static void flush_to_ldisc(struct work_struct *work)
 	struct tty_port *port = container_of(work, struct tty_port, buf.work);
 	struct tty_bufhead *buf = &port->buf;
 
-	mutex_lock(&buf->lock);
+	guard(mutex)(&buf->lock);
 
 	while (1) {
 		struct tty_buffer *head = buf->head;
@@ -480,7 +480,7 @@ static void flush_to_ldisc(struct work_struct *work)
 
 		/* Ldisc or user is trying to gain exclusive access */
 		if (atomic_read(&buf->priority))
-			break;
+			return;
 
 		/* paired w/ release in __tty_buffer_request_room();
 		 * ensures commit value read is not stale if the head
@@ -493,7 +493,7 @@ static void flush_to_ldisc(struct work_struct *work)
 		count = smp_load_acquire(&head->commit) - head->read;
 		if (!count) {
 			if (next == NULL)
-				break;
+				return;
 			buf->head = next;
 			tty_buffer_free(port, head);
 			continue;
@@ -504,13 +504,10 @@ static void flush_to_ldisc(struct work_struct *work)
 		if (rcvd < count)
 			lookahead_bufs(port, head);
 		if (!rcvd)
-			break;
+			return;
 
 		cond_resched();
 	}
-
-	mutex_unlock(&buf->lock);
-
 }
 
 static inline void tty_flip_buffer_commit(struct tty_buffer *tail)
@@ -559,13 +556,12 @@ int tty_insert_flip_string_and_push_buffer(struct tty_port *port,
 					   const u8 *chars, size_t size)
 {
 	struct tty_bufhead *buf = &port->buf;
-	unsigned long flags;
 
-	spin_lock_irqsave(&port->lock, flags);
-	size = tty_insert_flip_string(port, chars, size);
-	if (size)
-		tty_flip_buffer_commit(buf->tail);
-	spin_unlock_irqrestore(&port->lock, flags);
+	scoped_guard(spinlock_irqsave, &port->lock) {
+		size = tty_insert_flip_string(port, chars, size);
+		if (size)
+			tty_flip_buffer_commit(buf->tail);
+	}
 
 	tty_buffer_queue_work(buf);
 
