@@ -1913,37 +1913,34 @@ static struct tty_driver *tty_lookup_driver(dev_t device, struct file *filp,
 	return driver;
 }
 
+DEFINE_FREE(driver_kref_put, struct tty_driver *, if (!IS_ERR(_T)) tty_driver_kref_put(_T));
+
 static struct tty_struct *tty_kopen(dev_t device, int shared)
 {
-	struct tty_struct *tty;
-	struct tty_driver *driver;
+	guard(mutex)(&tty_mutex);
 
-	scoped_guard(mutex, &tty_mutex) {
-		int index = -1;
+	int index = -1;
+	struct tty_driver __free(driver_kref_put) *driver = tty_lookup_driver(device, NULL, &index);
+	if (IS_ERR(driver))
+		return ERR_CAST(driver);
 
-		driver = tty_lookup_driver(device, NULL, &index);
-		if (IS_ERR(driver)) {
-			return ERR_CAST(driver);
-		}
+	/* check whether we're reopening an existing tty */
+	struct tty_struct *tty = tty_driver_lookup_tty(driver, NULL, index);
+	if (IS_ERR(tty) || shared)
+		return tty;
 
-		/* check whether we're reopening an existing tty */
-		tty = tty_driver_lookup_tty(driver, NULL, index);
-		if (IS_ERR(tty) || shared)
-			break;
-
-		if (tty) {
-			/* drop kref from tty_driver_lookup_tty() */
-			tty_kref_put(tty);
-			tty = ERR_PTR(-EBUSY);
-		} else { /* tty_init_dev returns tty with the tty_lock held */
-			tty = tty_init_dev(driver, index);
-			if (IS_ERR(tty))
-				break;
-			tty_port_set_kopened(tty->port, 1);
-		}
+	if (tty) {
+		/* drop kref from tty_driver_lookup_tty() */
+		tty_kref_put(tty);
+		return ERR_PTR(-EBUSY);
 	}
 
-	tty_driver_kref_put(driver);
+	/* tty_init_dev returns tty with the tty_lock held */
+	tty = tty_init_dev(driver, index);
+	if (IS_ERR(tty))
+		return tty;
+
+	tty_port_set_kopened(tty->port, 1);
 
 	return tty;
 }
@@ -2003,12 +2000,12 @@ static struct tty_struct *tty_open_by_driver(dev_t device,
 					     struct file *filp)
 {
 	struct tty_struct *tty;
-	struct tty_driver *driver = NULL;
 	int index = -1;
 	int retval;
 
 	mutex_lock(&tty_mutex);
-	driver = tty_lookup_driver(device, filp, &index);
+
+	struct tty_driver __free(driver_kref_put) *driver = tty_lookup_driver(device, filp, &index);
 	if (IS_ERR(driver)) {
 		mutex_unlock(&tty_mutex);
 		return ERR_CAST(driver);
@@ -2018,36 +2015,33 @@ static struct tty_struct *tty_open_by_driver(dev_t device,
 	tty = tty_driver_lookup_tty(driver, filp, index);
 	if (IS_ERR(tty)) {
 		mutex_unlock(&tty_mutex);
-		goto out;
+		return tty;
 	}
 
 	if (tty) {
 		if (tty_port_kopened(tty->port)) {
 			tty_kref_put(tty);
 			mutex_unlock(&tty_mutex);
-			tty = ERR_PTR(-EBUSY);
-			goto out;
+			return ERR_PTR(-EBUSY);
 		}
 		mutex_unlock(&tty_mutex);
 		retval = tty_lock_interruptible_no_ref(tty);
 		if (retval) {
 			if (retval == -EINTR)
-				retval = -ERESTARTSYS;
-			tty = ERR_PTR(retval);
-			goto out;
+				return ERR_PTR(-ERESTARTSYS);
+			return ERR_PTR(retval);
 		}
 		retval = tty_reopen(tty);
 		if (retval < 0) {
 			tty_unlock_no_ref(tty);
 			tty_kref_put(tty);
-			tty = ERR_PTR(retval);
+			return ERR_PTR(retval);
 		}
 	} else { /* Returns with the tty_lock held for now */
 		tty = tty_init_dev(driver, index);
 		mutex_unlock(&tty_mutex);
 	}
-out:
-	tty_driver_kref_put(driver);
+
 	return tty;
 }
 
