@@ -93,6 +93,8 @@ static inline void uart_port_unlock_deref(struct uart_port *uport, unsigned long
 	}
 }
 
+DEFINE_FREE(uart_port_ref, struct uart_port *, if (_T) uart_port_deref(_T));
+
 static inline struct uart_port *uart_port_check(struct uart_state *state)
 {
 	lockdep_assert_held(&state->port.mutex);
@@ -706,9 +708,8 @@ EXPORT_SYMBOL_GPL(uart_xchar_out);
 static void uart_send_xchar(struct tty_struct *tty, u8 ch)
 {
 	struct uart_state *state = tty->driver_data;
-	struct uart_port *port;
 
-	port = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
 	if (!port)
 		return;
 
@@ -720,16 +721,14 @@ static void uart_send_xchar(struct tty_struct *tty, u8 ch)
 		if (ch)
 			port->ops->start_tx(port);
 	}
-	uart_port_deref(port);
 }
 
 static void uart_throttle(struct tty_struct *tty)
 {
 	struct uart_state *state = tty->driver_data;
 	upstat_t mask = UPSTAT_SYNC_FIFO;
-	struct uart_port *port;
 
-	port = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
 	if (!port)
 		return;
 
@@ -748,17 +747,14 @@ static void uart_throttle(struct tty_struct *tty)
 
 	if (mask & UPSTAT_AUTOXOFF)
 		uart_send_xchar(tty, STOP_CHAR(tty));
-
-	uart_port_deref(port);
 }
 
 static void uart_unthrottle(struct tty_struct *tty)
 {
 	struct uart_state *state = tty->driver_data;
 	upstat_t mask = UPSTAT_SYNC_FIFO;
-	struct uart_port *port;
 
-	port = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
 	if (!port)
 		return;
 
@@ -777,8 +773,6 @@ static void uart_unthrottle(struct tty_struct *tty)
 
 	if (mask & UPSTAT_AUTOXOFF)
 		uart_send_xchar(tty, START_CHAR(tty));
-
-	uart_port_deref(port);
 }
 
 static int uart_get_info(struct tty_port *port, struct serial_struct *retinfo)
@@ -1200,7 +1194,6 @@ static void uart_enable_ms(struct uart_port *uport)
  */
 static int uart_wait_modem_status(struct tty_struct *tty, struct uart_state *state, unsigned long arg)
 {
-	struct uart_port *uport;
 	struct tty_port *port = &state->port;
 	DECLARE_WAITQUEUE(wait, current);
 	struct uart_icount cprev, cnow;
@@ -1209,15 +1202,14 @@ static int uart_wait_modem_status(struct tty_struct *tty, struct uart_state *sta
 	/*
 	 * note the counters on entry
 	 */
-	uport = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *uport = uart_port_ref(state);
 	if (!uport)
 		return -EIO;
 
 	mutex_lock(&port->mutex);
 	if (tty_io_error(tty)) {
 		mutex_unlock(&port->mutex);
-		ret = -EIO;
-		goto out_deref;
+		return -EIO;
 	}
 
 	uart_port_lock_irq(uport);
@@ -1260,8 +1252,6 @@ static int uart_wait_modem_status(struct tty_struct *tty, struct uart_state *sta
 	}
 	__set_current_state(TASK_RUNNING);
 	remove_wait_queue(&port->delta_msr_wait, &wait);
-out_deref:
-	uart_port_deref(uport);
 
 	return ret;
 }
@@ -1763,10 +1753,9 @@ static void uart_tty_port_shutdown(struct tty_port *port)
 static void uart_wait_until_sent(struct tty_struct *tty, int timeout)
 {
 	struct uart_state *state = tty->driver_data;
-	struct uart_port *port;
 	unsigned long char_time, expire, fifo_timeout;
 
-	port = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
 	if (!port)
 		return;
 
@@ -1827,7 +1816,6 @@ static void uart_wait_until_sent(struct tty_struct *tty, int timeout)
 		if (timeout && time_after(jiffies, expire))
 			break;
 	}
-	uart_port_deref(port);
 }
 
 /*
@@ -1911,13 +1899,10 @@ static bool uart_carrier_raised(struct tty_port *port)
 static void uart_dtr_rts(struct tty_port *port, bool active)
 {
 	struct uart_state *state = container_of(port, struct uart_state, port);
-	struct uart_port *uport;
 
-	uport = uart_port_ref(state);
-	if (!uport)
-		return;
-	uart_port_dtr_rts(uport, active);
-	uart_port_deref(uport);
+	struct uart_port __free(uart_port_ref) *uport = uart_port_ref(state);
+	if (uport)
+		uart_port_dtr_rts(uport, active);
 }
 
 static int uart_install(struct tty_driver *driver, struct tty_struct *tty)
@@ -2696,32 +2681,26 @@ static int uart_poll_get_char(struct tty_driver *driver, int line)
 {
 	struct uart_driver *drv = driver->driver_state;
 	struct uart_state *state = drv->state + line;
-	struct uart_port *port;
-	int ret = -1;
 
-	port = uart_port_ref(state);
-	if (port) {
-		ret = port->ops->poll_get_char(port);
-		uart_port_deref(port);
-	}
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
+	if (port)
+		return port->ops->poll_get_char(port);
 
-	return ret;
+	return -1;
 }
 
 static void uart_poll_put_char(struct tty_driver *driver, int line, char ch)
 {
 	struct uart_driver *drv = driver->driver_state;
 	struct uart_state *state = drv->state + line;
-	struct uart_port *port;
 
-	port = uart_port_ref(state);
+	struct uart_port __free(uart_port_ref) *port = uart_port_ref(state);
 	if (!port)
 		return;
 
 	if (ch == '\n')
 		port->ops->poll_put_char(port, '\r');
 	port->ops->poll_put_char(port, ch);
-	uart_port_deref(port);
 }
 #endif
 
