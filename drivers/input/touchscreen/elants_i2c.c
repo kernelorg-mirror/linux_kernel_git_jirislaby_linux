@@ -32,6 +32,7 @@
 #include <linux/buffer_head.h>
 #include <linux/slab.h>
 #include <linux/firmware.h>
+#include <linux/hid-over-i2c-acpi.h>
 #include <linux/input/mt.h>
 #include <linux/input/touchscreen.h>
 #include <linux/acpi.h>
@@ -39,7 +40,6 @@
 #include <linux/pm_wakeirq.h>
 #include <linux/gpio/consumer.h>
 #include <linux/regulator/consumer.h>
-#include <linux/uuid.h>
 #include <linux/unaligned.h>
 
 /* Device, Driver information */
@@ -1358,40 +1358,6 @@ static void elants_i2c_power_off(void *_data)
 	}
 }
 
-#ifdef CONFIG_ACPI
-static const struct acpi_device_id i2c_hid_ids[] = {
-	{"ACPI0C50", 0 },
-	{"PNP0C50", 0 },
-	{ },
-};
-
-static const guid_t i2c_hid_guid =
-	GUID_INIT(0x3CDFF6F7, 0x4267, 0x4555,
-		  0xAD, 0x05, 0xB3, 0x0A, 0x3D, 0x89, 0x38, 0xDE);
-
-static bool elants_acpi_is_hid_device(struct device *dev)
-{
-	acpi_handle handle = ACPI_HANDLE(dev);
-	union acpi_object *obj;
-
-	if (acpi_match_device_ids(ACPI_COMPANION(dev), i2c_hid_ids))
-		return false;
-
-	obj = acpi_evaluate_dsm_typed(handle, &i2c_hid_guid, 1, 1, NULL, ACPI_TYPE_INTEGER);
-	if (obj) {
-		ACPI_FREE(obj);
-		return true;
-	}
-
-	return false;
-}
-#else
-static bool elants_acpi_is_hid_device(struct device *dev)
-{
-	return false;
-}
-#endif
-
 static int elants_i2c_probe(struct i2c_client *client)
 {
 	union i2c_smbus_data dummy;
@@ -1400,7 +1366,7 @@ static int elants_i2c_probe(struct i2c_client *client)
 	int error;
 
 	/* Don't bind to i2c-hid compatible devices, these are handled by the i2c-hid drv. */
-	if (elants_acpi_is_hid_device(&client->dev)) {
+	if (i2c_hid_acpi_is_hid_device(&client->dev)) {
 		dev_warn(&client->dev, "This device appears to be an I2C-HID device, not binding\n");
 		return -ENODEV;
 	}
