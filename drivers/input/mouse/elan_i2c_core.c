@@ -20,6 +20,7 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/firmware.h>
+#include <linux/hid-over-i2c-acpi.h>
 #include <linux/i2c.h>
 #include <linux/init.h>
 #include <linux/input.h>
@@ -1223,6 +1224,29 @@ static void elan_disable_regulator(void *_data)
 	regulator_disable(data->vcc);
 }
 
+#ifdef CONFIG_ACPI
+static bool elan_acpi_is_hid_device(struct device *dev)
+{
+	struct acpi_device *adev = ACPI_COMPANION(dev);
+
+	/*
+	 * Some devices use the generic ELAN0000 ID, but are I2C-HID devices
+	 * which do not work properly with this driver. Leave those to i2c-hid.
+	 *
+	 * Do not check devices with other IDs: hid_ignore() makes HID core
+	 * ignore some of them (ELAN 0x0400/0x0401), even though they are
+	 * described as I2C-HID compatible, so nothing would drive them.
+	 */
+	return adev && acpi_dev_hid_match(adev, "ELAN0000") &&
+	       i2c_hid_acpi_is_hid_device(dev);
+}
+#else
+static bool elan_acpi_is_hid_device(struct device *dev)
+{
+	return false;
+}
+#endif
+
 static int elan_probe(struct i2c_client *client)
 {
 	const struct elan_transport_ops *transport_ops;
@@ -1230,6 +1254,12 @@ static int elan_probe(struct i2c_client *client)
 	struct elan_tp_data *data;
 	unsigned long irqflags;
 	int error;
+
+	/* Don't bind to i2c-hid compatible devices, these are handled by the i2c-hid drv. */
+	if (elan_acpi_is_hid_device(dev)) {
+		dev_info(dev, "This device appears to be an I2C-HID device, not binding\n");
+		return -ENODEV;
+	}
 
 	if (IS_ENABLED(CONFIG_MOUSE_ELAN_I2C_I2C) &&
 	    i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
