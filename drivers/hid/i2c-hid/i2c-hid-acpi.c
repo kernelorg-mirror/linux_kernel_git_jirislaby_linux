@@ -21,13 +21,13 @@
 
 #include <linux/acpi.h>
 #include <linux/device.h>
+#include <linux/hid-over-i2c-acpi.h>
 #include <linux/i2c.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pm.h>
 
 #include "i2c-hid.h"
-#include "i2c-hid-acpi.h"
 
 struct i2c_hid_acpi {
 	struct i2chid_ops ops;
