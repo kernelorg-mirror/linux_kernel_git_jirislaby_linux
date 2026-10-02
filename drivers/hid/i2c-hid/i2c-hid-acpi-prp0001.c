@@ -13,11 +13,11 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/i2c.h>
+#include <linux/hid-over-i2c-acpi.h>
 #include <linux/module.h>
 #include <linux/of.h>
 
 #include "i2c-hid.h"
-#include "i2c-hid-acpi.h"
 
 static int i2c_hid_acpi_prp0001_power_up(struct i2chid_ops *ops)
 {
