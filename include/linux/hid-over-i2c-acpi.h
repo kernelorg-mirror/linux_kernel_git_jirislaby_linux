@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 
-#ifndef _I2C_HID_ACPI_H
-#define _I2C_HID_ACPI_H
+#ifndef _HID_OVER_I2C_ACPI_H_
+#define _HID_OVER_I2C_ACPI_H_
 
 #include <linux/acpi.h>
 #include <linux/uuid.h>
